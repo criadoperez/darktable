@@ -697,7 +697,7 @@ int scrolled(dt_iop_module_t *self, double x, double y, int up, uint32_t state)
 {
   dt_iop_graduatednd_gui_data_t *g = (dt_iop_graduatednd_gui_data_t *)self->gui_data;
   dt_iop_graduatednd_params_t *p = (dt_iop_graduatednd_params_t *)self->params;
-  if((state & GDK_CONTROL_MASK) == GDK_CONTROL_MASK)
+  if(dt_modifier_is(state, GDK_CONTROL_MASK))
   {
     float dens;
     if(up)
@@ -710,7 +710,7 @@ int scrolled(dt_iop_module_t *self, double x, double y, int up, uint32_t state)
     }
     return 1;
   }
-  if((state & GDK_SHIFT_MASK) == GDK_SHIFT_MASK)
+  if(dt_modifier_is(state, GDK_SHIFT_MASK))
   {
     float comp;
     if(up)
@@ -1137,30 +1137,13 @@ void gui_init(struct dt_iop_module_t *self)
 GSList *mouse_actions(struct dt_iop_module_t *self)
 {
   GSList *lm = NULL;
-  dt_mouse_action_t *a = NULL;
-
-  a = (dt_mouse_action_t *)calloc(1, sizeof(dt_mouse_action_t));
-  a->action = DT_MOUSE_ACTION_LEFT_DRAG;
-  g_snprintf(a->name, sizeof(a->name), _("[%s on nodes] change line rotation"), self->name());
-  lm = g_slist_append(lm, a);
-
-  a = (dt_mouse_action_t *)calloc(1, sizeof(dt_mouse_action_t));
-  a->action = DT_MOUSE_ACTION_LEFT_DRAG;
-  g_snprintf(a->name, sizeof(a->name), _("[%s on line] move line"), self->name());
-  lm = g_slist_append(lm, a);
-
-  a = (dt_mouse_action_t *)calloc(1, sizeof(dt_mouse_action_t));
-  a->key.accel_mods = GDK_CONTROL_MASK;
-  a->action = DT_MOUSE_ACTION_SCROLL;
-  g_snprintf(a->name, sizeof(a->name), _("[%s on line] change density"), self->name());
-  lm = g_slist_append(lm, a);
-
-  a = (dt_mouse_action_t *)calloc(1, sizeof(dt_mouse_action_t));
-  a->key.accel_mods = GDK_SHIFT_MASK;
-  a->action = DT_MOUSE_ACTION_SCROLL;
-  g_snprintf(a->name, sizeof(a->name), _("[%s on line] change hardness"), self->name());
-  lm = g_slist_append(lm, a);
-
+  lm = dt_mouse_action_create_format(lm, DT_MOUSE_ACTION_LEFT_DRAG, 0,
+                                     _("[%s on nodes] change line rotation"), self->name());
+  lm = dt_mouse_action_create_format(lm, DT_MOUSE_ACTION_LEFT_DRAG, 0, _("[%s on line] move line"), self->name());
+  lm = dt_mouse_action_create_format(lm, DT_MOUSE_ACTION_SCROLL, GDK_CONTROL_MASK,
+                                     _("[%s on line] change density"), self->name());
+  lm = dt_mouse_action_create_format(lm, DT_MOUSE_ACTION_SCROLL, GDK_SHIFT_MASK,
+                                     _("[%s on line] change hardness"), self->name());
   return lm;
 }
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh

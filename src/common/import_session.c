@@ -117,7 +117,11 @@ static char *_import_session_path_pattern()
     goto bail_out;
   }
 
+#ifdef WIN32
+  res = g_build_path("/", base, sub, (char *)NULL);
+#else
   res = g_build_path(G_DIR_SEPARATOR_S, base, sub, (char *)NULL);
+#endif
 
 bail_out:
   g_free(base);
@@ -184,7 +188,7 @@ void dt_import_session_unref(struct dt_import_session_t *self)
 
 void dt_import_session_import(struct dt_import_session_t *self)
 {
-  const int32_t id = dt_image_import(self->film->id, self->current_filename, TRUE);
+  const int32_t id = dt_image_import(self->film->id, self->current_filename, TRUE, TRUE);
   if(id)
   {
     DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_VIEWMANAGER_THUMBTABLE_ACTIVATE, id);

@@ -126,8 +126,11 @@ typedef unsigned int u_int;
 /* Create cloned functions for various CPU SSE generations */
 /* See for instructions https://hannes.hauswedell.net/post/2017/12/09/fmv/ */
 /* TL;DR : use only on SIMD functions containing low-level paralellized/vectorized loops */
-#if __has_attribute(target_clones) && !defined(_WIN32)
+#if __has_attribute(target_clones) && !defined(_WIN32) && (defined(__amd64__) || defined(__amd64) || defined(__x86_64__) || defined(__x86_64))
 #define __DT_CLONE_TARGETS__ __attribute__((target_clones("default", "sse2", "sse3", "sse4.1", "sse4.2", "popcnt", "avx", "avx2", "avx512f", "fma4")))
+#elif __has_attribute(target_clones) && !defined(_WIN32) && defined(__PPC64__)
+/* __PPC64__ is the only macro tested for in is_supported_platform.h, other macros would fail there anyway. */
+#define __DT_CLONE_TARGETS__ __attribute__((target_clones("default","cpu=power9")))
 #else
 #define __DT_CLONE_TARGETS__
 #endif
@@ -137,7 +140,7 @@ typedef unsigned int u_int;
 #define DT_ALIGNED_PIXEL __attribute__((aligned(16)))
 
 /* Helper to force stack vectors to be aligned on 64 bits blocks to enable AVX2 */
-#define DT_IS_ALIGNED(x) __builtin_assume_aligned(x, 64);
+#define DT_IS_ALIGNED(x) __builtin_assume_aligned(x, 64)
 
 #ifndef _RELEASE
 #include "common/poison.h"
@@ -385,6 +388,25 @@ static inline void dt_unlock_image_pair(int32_t imgid1, int32_t imgid2) RELEASE(
   dt_pthread_mutex_unlock(&(darktable.db_image[imgid2 & (DT_IMAGE_DBLOCKS-1)]));
 }
 
+// check whether the specified mask of modifier keys exactly matches, among the set Shift+Control+(Alt/Meta).
+// ignores the state of any other shifting keys
+static inline gboolean dt_modifier_is(const GdkModifierType state, const GdkModifierType desired_modifier_mask)
+{
+  const GdkModifierType modifiers = gtk_accelerator_get_default_mod_mask();
+//TODO: on Macs, remap the GDK_CONTROL_MASK bit in desired_modifier_mask to be the bit for the Cmd key
+  return (state & modifiers) == desired_modifier_mask;
+}
+
+// check whether the given modifier state includes AT LEAST the specified mask of modifier keys
+static inline gboolean dt_modifiers_include(const GdkModifierType state, const GdkModifierType desired_modifier_mask)
+{
+//TODO: on Macs, remap the GDK_CONTROL_MASK bit in desired_modifier_mask to be the bit for the Cmd key
+  const GdkModifierType modifiers = gtk_accelerator_get_default_mod_mask();
+  // check whether all modifier bits of interest are turned on
+  return (state & (modifiers & desired_modifier_mask)) == desired_modifier_mask;
+}
+
+
 static inline gboolean dt_is_aligned(const void *pointer, size_t byte_count)
 {
     return (uintptr_t)pointer % byte_count == 0;
@@ -480,10 +502,10 @@ static inline float *dt_calloc_perthread_float(const size_t n, size_t* padded_si
 }
 
 // Given the buffer and object count returned by dt_alloc_perthread, return the current thread's private buffer.
-#define dt_get_perthread(buf, padsize) ((buf) + ((padsize) * dt_get_thread_num()))
+#define dt_get_perthread(buf, padsize) DT_IS_ALIGNED((buf) + ((padsize) * dt_get_thread_num()))
 // Given the buffer and object count returned by dt_alloc_perthread and a thread count in 0..dt_get_num_threads(),
 // return a pointer to the indicated thread's private buffer.
-#define dt_get_bythread(buf, padsize, tnum) ((buf) + ((padsize) * (tnum)))
+#define dt_get_bythread(buf, padsize, tnum) DT_IS_ALIGNED((buf) + ((padsize) * (tnum)))
 
 // Most code in dt assumes that the compiler is capable of auto-vectorization.  In some cases, this will yield
 // suboptimal code if the compiler in fact does NOT auto-vectorize.  Uncomment the following line for such a
@@ -550,6 +572,38 @@ static inline void copy_pixel_nontemporal(float *const __restrict__ out, const f
 static inline void copy_pixel(float *const __restrict__ out, const float *const __restrict__ in)
 {
   for_each_channel(k,aligned(in,out:16)) out[k] = in[k];
+}
+
+// a few macros and helper functions to speed up certain frequently-used GLib operations
+#define g_list_is_singleton(list) ((list) && (!(list)->next))
+static inline gboolean g_list_shorter_than(const GList *list, unsigned len)
+{
+  // instead of scanning the full list to compute its length and then comparing against the limit,
+  // bail out as soon as the limit is reached.  Usage: g_list_shorter_than(l,4) instead of g_list_length(l)<4
+  while (len-- > 0)
+  {
+    if (!list) return TRUE;
+    list = g_list_next(list);
+  }
+  return FALSE;
+}
+
+// advance the list by one position, unless already at the final node
+static inline GList *g_list_next_bounded(GList *list)
+{
+  return g_list_next(list) ? g_list_next(list) : list;
+}
+
+static inline const GList *g_list_next_wraparound(const GList *list, const GList *head)
+{
+  return g_list_next(list) ? g_list_next(list) : head;
+}
+
+static inline const GList *g_list_prev_wraparound(const GList *list)
+{
+  // return the prior element of the list, unless already on the first element; in that case, return the last
+  // element of the list.
+  return g_list_previous(list) ? g_list_previous(list) : g_list_last((GList*)list);
 }
 
 void dt_print_mem_usage();

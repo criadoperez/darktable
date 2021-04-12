@@ -67,6 +67,8 @@
 #include "libs/lib.h"
 #include "lua/init.h"
 #include "views/view.h"
+#include "conf_gen.h"
+
 #include <errno.h>
 #include <glib.h>
 #include <glib/gstdio.h>
@@ -265,7 +267,7 @@ int dt_load_from_string(const gchar *input, gboolean open_image_in_dr, gboolean 
     gchar *directory = g_path_get_dirname((const gchar *)filename);
     dt_film_t film;
     const int filmid = dt_film_new(&film, directory);
-    id = dt_image_import(filmid, filename, TRUE);
+    id = dt_image_import(filmid, filename, TRUE, TRUE);
     g_free(directory);
     if(id)
     {
@@ -609,7 +611,7 @@ int dt_init(int argc, char *argv[], const gboolean init_gui, const gboolean load
         else if(!strcmp(argv[k + 1], "ioporder"))
           darktable.unmuted |= DT_DEBUG_IOPORDER; // iop order information are reported on console
         else if(!strcmp(argv[k + 1], "imageio"))
-          darktable.unmuted |= DT_DEBUG_IMAGEIO; // image importing or exporting mesages on console
+          darktable.unmuted |= DT_DEBUG_IMAGEIO; // image importing or exporting messages on console
         else if(!strcmp(argv[k + 1], "undo"))
           darktable.unmuted |= DT_DEBUG_UNDO; // undo/redo
         else if(!strcmp(argv[k + 1], "signal"))
@@ -889,6 +891,8 @@ int dt_init(int argc, char *argv[], const gboolean init_gui, const gboolean load
   // set the interface language and prepare selection for prefs
   darktable.l10n = dt_l10n_init(init_gui);
 
+  dt_confgen_init();
+
   // we need this REALLY early so that error messages can be shown, however after gtk_disable_setlocale
   if(init_gui)
   {
@@ -999,6 +1003,13 @@ int dt_init(int argc, char *argv[], const gboolean init_gui, const gboolean load
     dt_pthread_mutex_init(&darktable.control->run_mutex, NULL);
   }
 
+  // we initialize grouping early because it's needed for collection init
+  if(init_gui)
+  {
+    darktable.gui = (dt_gui_gtk_t *)calloc(1, sizeof(dt_gui_gtk_t));
+    darktable.gui->grouping = dt_conf_get_bool("ui_last/grouping");
+  }
+
   // initialize collection query
   darktable.collection = dt_collection_new(NULL);
 
@@ -1050,7 +1061,6 @@ int dt_init(int argc, char *argv[], const gboolean init_gui, const gboolean load
 
   if(init_gui)
   {
-    darktable.gui = (dt_gui_gtk_t *)calloc(1, sizeof(dt_gui_gtk_t));
     if(dt_gui_gtk_init(darktable.gui))
     {
       fprintf(stderr, "ERROR: can't init gui, aborting.\n");
@@ -1597,7 +1607,7 @@ void dt_configure_performance()
     dt_conf_set_int("host_memory_limit", MAX(mem >> 11, dt_conf_get_int("host_memory_limit")));
     dt_conf_set_int("singlebuffer_limit", MAX(16, dt_conf_get_int("singlebuffer_limit")));
     if(demosaic_quality == NULL || !strcmp(demosaic_quality, "always bilinear (fast)"))
-      dt_conf_set_string("plugins/darkroom/demosaic/quality", "at most PPG (reasonable)");
+      dt_conf_set_string("plugins/darkroom/demosaic/quality", "at most RCD (reasonable)");
     dt_conf_set_bool("ui/performance", FALSE);
   }
   else if(mem > (2lu << 20) && threads >= 4 && atom_cores == 0)
@@ -1610,7 +1620,7 @@ void dt_configure_performance()
     dt_conf_set_int("host_memory_limit", MAX(1500, dt_conf_get_int("host_memory_limit")));
     dt_conf_set_int("singlebuffer_limit", MAX(16, dt_conf_get_int("singlebuffer_limit")));
     if(demosaic_quality == NULL ||!strcmp(demosaic_quality, "always bilinear (fast)"))
-      dt_conf_set_string("plugins/darkroom/demosaic/quality", "at most PPG (reasonable)");
+      dt_conf_set_string("plugins/darkroom/demosaic/quality", "at most RCD (reasonable)");
     dt_conf_set_bool("ui/performance", FALSE);
   }
   else if(mem < (1lu << 20) || threads <= 2 || atom_cores > 0)
@@ -1632,7 +1642,7 @@ void dt_configure_performance()
     dt_conf_set_int("worker_threads", 2);
     dt_conf_set_int("host_memory_limit", 1500);
     dt_conf_set_int("singlebuffer_limit", 16);
-    dt_conf_set_string("plugins/darkroom/demosaic/quality", "at most PPG (reasonable)");
+    dt_conf_set_string("plugins/darkroom/demosaic/quality", "at most RCD (reasonable)");
     dt_conf_set_bool("ui/performance", FALSE);
   }
 
@@ -1647,15 +1657,12 @@ void dt_configure_performance()
 
 int dt_capabilities_check(char *capability)
 {
-  GList *capabilities = darktable.capabilities;
-
-  while(capabilities)
+  for(GList *capabilities = darktable.capabilities; capabilities; capabilities = g_list_next(capabilities))
   {
     if(!strcmp(capabilities->data, capability))
     {
       return TRUE;
     }
-    capabilities = g_list_next(capabilities);
   }
   return FALSE;
 }

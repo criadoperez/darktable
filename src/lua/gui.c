@@ -78,12 +78,10 @@ static int hovered_cb(lua_State *L)
 static int act_on_cb(lua_State *L)
 {
   lua_newtable(L);
-  const GList *image = dt_view_get_images_to_act_on(FALSE, TRUE);
-  while(image)
+  for(const GList *image = dt_view_get_images_to_act_on(FALSE, TRUE, TRUE); image; image = g_list_next(image))
   {
     luaA_push(L, dt_lua_image_t, &image->data);
     luaL_ref(L, -2);
-    image = g_list_next((GList *)image);
   }
   return 1;
 }
@@ -403,6 +401,7 @@ int dt_lua_init_gui(lua_State *L)
 
     // allow to react to highlighting an image
     lua_pushcfunction(L, dt_lua_event_multiinstance_register);
+    lua_pushcfunction(L, dt_lua_event_multiinstance_destroy);
     lua_pushcfunction(L, dt_lua_event_multiinstance_trigger);
     dt_lua_event_add(L, "mouse-over-image-changed");
     DT_DEBUG_CONTROL_SIGNAL_CONNECT(darktable.signals, DT_SIGNAL_MOUSE_OVER_IMAGE_CHANGE, G_CALLBACK(on_mouse_over_image_changed), NULL);

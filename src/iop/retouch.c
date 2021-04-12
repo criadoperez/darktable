@@ -271,8 +271,7 @@ static dt_masks_point_group_t *rt_get_mask_point_group(dt_iop_module_t *self, in
   const dt_masks_form_t *grp = dt_masks_get_from_id(self->dev, bp->mask_id);
   if(grp && (grp->type & DT_MASKS_GROUP))
   {
-    GList *forms = g_list_first(grp->points);
-    while(forms)
+    for(const GList *forms = grp->points; forms; forms = g_list_next(forms))
     {
       dt_masks_point_group_t *grpt = (dt_masks_point_group_t *)forms->data;
       if(grpt->formid == formid)
@@ -280,7 +279,6 @@ static dt_masks_point_group_t *rt_get_mask_point_group(dt_iop_module_t *self, in
         form_point_group = grpt;
         break;
       }
-      forms = g_list_next(forms);
     }
   }
 
@@ -590,9 +588,8 @@ static void rt_resynch_params(struct dt_iop_module_t *self)
   dt_masks_form_t *grp = dt_masks_get_from_id(darktable.develop, bp->mask_id);
   if(grp && (grp->type & DT_MASKS_GROUP))
   {
-    GList *forms = g_list_first(grp->points);
     int new_form_index = 0;
-    while((new_form_index < RETOUCH_NO_FORMS) && forms)
+    for(GList *forms = grp->points; (new_form_index < RETOUCH_NO_FORMS) && forms; forms = g_list_next(forms))
     {
       dt_masks_point_group_t *grpt = (dt_masks_point_group_t *)forms->data;
       if(grpt)
@@ -640,8 +637,6 @@ static void rt_resynch_params(struct dt_iop_module_t *self)
           }
         }
       }
-
-      forms = g_list_next(forms);
     }
   }
 
@@ -786,7 +781,7 @@ static int rt_shape_is_being_added(dt_iop_module_t *self, const int shape_type)
   {
     if(self->dev->form_visible->type & DT_MASKS_GROUP)
     {
-      GList *forms = g_list_first(self->dev->form_visible->points);
+      GList *forms = self->dev->form_visible->points;
       if(forms)
       {
         dt_masks_point_group_t *grpt = (dt_masks_point_group_t *)forms->data;
@@ -1556,9 +1551,9 @@ static gboolean rt_edit_masks_callback(GtkWidget *widget, GdkEventButton *event,
     dt_iop_color_picker_reset(self, TRUE);
 
     dt_masks_form_t *grp = dt_masks_get_from_id(darktable.develop, self->blend_params->mask_id);
-    if(grp && (grp->type & DT_MASKS_GROUP) && g_list_length(grp->points) > 0)
+    if(grp && (grp->type & DT_MASKS_GROUP) && grp->points)
     {
-      const int control_button_pressed = event->state & GDK_CONTROL_MASK;
+      const gboolean control_button_pressed = dt_modifier_is(event->state, GDK_CONTROL_MASK);
 
       switch(bd->masks_shown)
       {
@@ -1598,8 +1593,7 @@ static gboolean rt_add_shape_callback(GtkWidget *widget, GdkEventButton *e, dt_i
 
   if(darktable.gui->reset) return FALSE;
 
-  GdkModifierType modifiers = gtk_accelerator_get_default_mod_mask();
-  const int creation_continuous = ((e->state & modifiers) == GDK_CONTROL_MASK);
+  const int creation_continuous = dt_modifier_is(e->state, GDK_CONTROL_MASK);
 
   rt_add_shape(widget, creation_continuous, self);
 
@@ -1636,8 +1630,7 @@ static gboolean rt_select_algorithm_callback(GtkToggleButton *togglebutton, GdkE
   gboolean accept = TRUE;
 
   const int index = rt_get_selected_shape_index(p);
-  GdkModifierType modifiers = gtk_accelerator_get_default_mod_mask();
-  if(index >= 0 && ((e->state & modifiers) == GDK_CONTROL_MASK))
+  if(index >= 0 && dt_modifier_is(e->state, GDK_CONTROL_MASK))
   {
     if(new_algo != p->rt_forms[index].algorithm)
     {
@@ -1667,7 +1660,7 @@ static gboolean rt_select_algorithm_callback(GtkToggleButton *togglebutton, GdkE
     return FALSE;
   }
 
-  if(index >= 0 && ((e->state & modifiers) == GDK_CONTROL_MASK))
+  if(index >= 0 && dt_modifier_is(e->state, GDK_CONTROL_MASK))
   {
     if(p->algorithm != p->rt_forms[index].algorithm)
     {
@@ -1854,7 +1847,7 @@ void gui_focus(struct dt_iop_module_t *self, gboolean in)
       dt_iop_gui_blend_data_t *bd = (dt_iop_gui_blend_data_t *)self->blend_data;
       //only show shapes if shapes exist
       dt_masks_form_t *grp = dt_masks_get_from_id(darktable.develop, self->blend_params->mask_id);
-      if(grp && (grp->type & DT_MASKS_GROUP) && g_list_length(grp->points) > 0)
+      if(grp && (grp->type & DT_MASKS_GROUP) && grp->points)
       {
         // got focus, show all shapes
         if(bd->masks_shown == DT_MASKS_EDIT_OFF)
@@ -1980,7 +1973,7 @@ void gui_update(dt_iop_module_t *self)
   if(darktable.develop->history_updating) bd->masks_shown = DT_MASKS_EDIT_OFF;
 
   //only toggle shape show button if shapes exist
-  if(grp && (grp->type & DT_MASKS_GROUP) && g_list_length(grp->points) > 0)
+  if(grp && (grp->type & DT_MASKS_GROUP) && grp->points)
   {
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g->bt_edit_masks),
                                  (bd->masks_shown != DT_MASKS_EDIT_OFF) && (darktable.develop->gui_module == self));
@@ -2038,24 +2031,24 @@ void gui_init(dt_iop_module_t *self)
                _("to add a shape select an algorithm and a shape type and click on the image.\n"
                  "shapes are added to the current scale"));
 
-  g->bt_edit_masks = dt_iop_togglebutton_new(self, N_("show and edit shapes on the current scale"),
-                                                   N_("show and edit shapes in restricted mode"),
+  g->bt_edit_masks = dt_iop_togglebutton_new(self, N_("editing"), N_("show and edit shapes on the current scale"),
+                                                                  N_("show and edit shapes in restricted mode"),
                                              G_CALLBACK(rt_edit_masks_callback), TRUE, 0, 0,
                                              dtgtk_cairo_paint_masks_eye, hbox_shapes);
 
-  g->bt_brush = dt_iop_togglebutton_new(self, N_("add brush"), N_("add multiple brush strokes"),
+  g->bt_brush = dt_iop_togglebutton_new(self, N_("shapes"), N_("add brush"), N_("add multiple brush strokes"),
                                         G_CALLBACK(rt_add_shape_callback), TRUE, 0, 0,
                                         dtgtk_cairo_paint_masks_brush, hbox_shapes);
 
-  g->bt_path = dt_iop_togglebutton_new(self, N_("add path"), N_("add multiple paths"),
+  g->bt_path = dt_iop_togglebutton_new(self, N_("shapes"), N_("add path"), N_("add multiple paths"),
                                        G_CALLBACK(rt_add_shape_callback), TRUE, 0, 0,
                                        dtgtk_cairo_paint_masks_path, hbox_shapes);
 
-  g->bt_ellipse = dt_iop_togglebutton_new(self, N_("add ellipse"), N_("add multiple ellipses"),
+  g->bt_ellipse = dt_iop_togglebutton_new(self, N_("shapes"), N_("add ellipse"), N_("add multiple ellipses"),
                                           G_CALLBACK(rt_add_shape_callback), TRUE, 0, 0,
                                           dtgtk_cairo_paint_masks_ellipse, hbox_shapes);
 
-  g->bt_circle = dt_iop_togglebutton_new(self, N_("add circle"), N_("add multiple circles"),
+  g->bt_circle = dt_iop_togglebutton_new(self, N_("shapes"), N_("add circle"), N_("add multiple circles"),
                                          G_CALLBACK(rt_add_shape_callback), TRUE, 0, 0,
                                          dtgtk_cairo_paint_masks_circle, hbox_shapes);
 
@@ -2064,19 +2057,19 @@ void gui_init(dt_iop_module_t *self)
 
   gtk_box_pack_start(GTK_BOX(hbox_algo), dt_ui_label_new(_("algorithms:")), FALSE, TRUE, 0);
 
-  g->bt_blur = dt_iop_togglebutton_new(self, N_("activate blur tool"), NULL,
+  g->bt_blur = dt_iop_togglebutton_new(self, N_("tools"), N_("activate blur tool"), NULL,
                                        G_CALLBACK(rt_select_algorithm_callback), TRUE, 0, 0,
                                        dtgtk_cairo_paint_tool_blur, hbox_algo);
 
-  g->bt_fill = dt_iop_togglebutton_new(self, N_("activate fill tool"), NULL,
+  g->bt_fill = dt_iop_togglebutton_new(self, N_("tools"), N_("activate fill tool"), NULL,
                                        G_CALLBACK(rt_select_algorithm_callback), TRUE, 0, 0,
                                        dtgtk_cairo_paint_tool_fill, hbox_algo);
 
-  g->bt_clone = dt_iop_togglebutton_new(self, N_("activate cloning tool"), NULL,
+  g->bt_clone = dt_iop_togglebutton_new(self, N_("tools"), N_("activate cloning tool"), NULL,
                                         G_CALLBACK(rt_select_algorithm_callback), TRUE, 0, 0,
                                         dtgtk_cairo_paint_tool_clone, hbox_algo);
 
-  g->bt_heal = dt_iop_togglebutton_new(self, N_("activate healing tool"), NULL,
+  g->bt_heal = dt_iop_togglebutton_new(self, N_("tools"), N_("activate healing tool"), NULL,
                                        G_CALLBACK(rt_select_algorithm_callback), TRUE, 0, 0,
                                        dtgtk_cairo_paint_tool_heal, hbox_algo);
 
@@ -2123,29 +2116,29 @@ void gui_init(dt_iop_module_t *self)
   GtkWidget *hbox_scale = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
 
   // display & suppress masks
-  g->bt_showmask = dt_iop_togglebutton_new(self, N_("display masks"), NULL,
+  g->bt_showmask = dt_iop_togglebutton_new(self, N_("editing"), N_("display masks"), NULL,
                                            G_CALLBACK(rt_showmask_callback), TRUE, 0, 0,
                                            dtgtk_cairo_paint_showmask, hbox_scale);
 
-  g->bt_suppress = dt_iop_togglebutton_new(self, N_("temporarily switch off shapes"), NULL,
+  g->bt_suppress = dt_iop_togglebutton_new(self, N_("editing"), N_("temporarily switch off shapes"), NULL,
                                            G_CALLBACK(rt_suppress_callback), TRUE, 0, 0,
                                            dtgtk_cairo_paint_eye_toggle, hbox_scale);
 
   gtk_box_pack_end(GTK_BOX(hbox_scale), gtk_grid_new(), TRUE, TRUE, 0);
 
   // copy/paste shapes
-  g->bt_paste_scale = dt_iop_togglebutton_new(self, N_("paste cut shapes to current scale"), NULL,
+  g->bt_paste_scale = dt_iop_togglebutton_new(self, N_("editing"), N_("paste cut shapes to current scale"), NULL,
                                               G_CALLBACK(rt_copypaste_scale_callback), TRUE, 0, 0,
                                               dtgtk_cairo_paint_paste_forms, hbox_scale);
 
-  g->bt_copy_scale = dt_iop_togglebutton_new(self, N_("cut shapes from current scale"), NULL,
+  g->bt_copy_scale = dt_iop_togglebutton_new(self, N_("editing"), N_("cut shapes from current scale"), NULL,
                                              G_CALLBACK(rt_copypaste_scale_callback), TRUE, 0, 0,
                                              dtgtk_cairo_paint_cut_forms, hbox_scale);
 
   gtk_box_pack_end(GTK_BOX(hbox_scale), gtk_grid_new(), TRUE, TRUE, 0);
 
   // display final image/current scale
-  g->bt_display_wavelet_scale = dt_iop_togglebutton_new(self, N_("display wavelet scale"), NULL,
+  g->bt_display_wavelet_scale = dt_iop_togglebutton_new(self, N_("editing"), N_("display wavelet scale"), NULL,
                                                         G_CALLBACK(rt_display_wavelet_scale_callback), TRUE, 0, 0,
                                                         dtgtk_cairo_paint_display_wavelet_scale, hbox_scale);
 
@@ -2178,7 +2171,7 @@ void gui_init(dt_iop_module_t *self)
   gtk_box_pack_start(GTK_BOX(prev_lvl), GTK_WIDGET(g->preview_levels_gslider), TRUE, TRUE, 0);
 
   // auto-levels button
-  g->bt_auto_levels = dt_iop_togglebutton_new(self, N_("auto levels"), NULL,
+  g->bt_auto_levels = dt_iop_togglebutton_new(self, N_("editing"), N_("auto levels"), NULL,
                                               G_CALLBACK(rt_auto_levels_callback), TRUE, 0, 0,
                                               dtgtk_cairo_paint_auto_levels, prev_lvl);
 
@@ -2318,8 +2311,7 @@ static void rt_compute_roi_in(struct dt_iop_module_t *self, struct dt_dev_pixelp
   const dt_masks_form_t *grp = dt_masks_get_from_id_ext(piece->pipe->forms, bp->mask_id);
   if(grp && (grp->type & DT_MASKS_GROUP))
   {
-    GList *forms = g_list_first(grp->points);
-    while(forms)
+    for(const GList *forms = grp->points; forms; forms = g_list_next(forms))
     {
       const dt_masks_point_group_t *grpt = (dt_masks_point_group_t *)forms->data;
       if(grpt)
@@ -2328,7 +2320,6 @@ static void rt_compute_roi_in(struct dt_iop_module_t *self, struct dt_dev_pixelp
         const dt_iop_retouch_algo_type_t algo = rt_get_algorithm_from_formid(p, formid);
         if(algo == DT_IOP_RETOUCH_FILL)
         {
-          forms = g_list_next(forms);
           continue;
         }
 
@@ -2341,7 +2332,6 @@ static void rt_compute_roi_in(struct dt_iop_module_t *self, struct dt_dev_pixelp
           int fl, ft, fw, fh;
           if(!dt_masks_get_area(self, piece, form, &fw, &fh, &fl, &ft))
           {
-            forms = g_list_next(forms);
             continue;
           }
 
@@ -2350,7 +2340,6 @@ static void rt_compute_roi_in(struct dt_iop_module_t *self, struct dt_dev_pixelp
           if(ft >= roi_in->y + roi_in->height || ft + fh <= roi_in->y || fl >= roi_in->x + roi_in->width
              || fl + fw <= roi_in->x)
           {
-            forms = g_list_next(forms);
             continue;
           }
 
@@ -2390,8 +2379,6 @@ static void rt_compute_roi_in(struct dt_iop_module_t *self, struct dt_dev_pixelp
           }
         }
       }
-
-      forms = g_list_next(forms);
     }
   }
 
@@ -2420,8 +2407,7 @@ static void rt_extend_roi_in_from_source_clones(struct dt_iop_module_t *self, st
   const dt_masks_form_t *grp = dt_masks_get_from_id_ext(piece->pipe->forms, bp->mask_id);
   if(grp && (grp->type & DT_MASKS_GROUP))
   {
-    GList *forms = g_list_first(grp->points);
-    while(forms)
+    for(const GList *forms = grp->points; forms; forms = g_list_next(forms))
     {
       const dt_masks_point_group_t *grpt = (dt_masks_point_group_t *)forms->data;
       if(grpt)
@@ -2436,7 +2422,6 @@ static void rt_extend_roi_in_from_source_clones(struct dt_iop_module_t *self, st
         // only process clone and heal
         if(algo != DT_IOP_RETOUCH_HEAL && algo != DT_IOP_RETOUCH_CLONE)
         {
-          forms = g_list_next(forms);
           continue;
         }
 
@@ -2448,7 +2433,6 @@ static void rt_extend_roi_in_from_source_clones(struct dt_iop_module_t *self, st
           int fl, ft, fw, fh;
           if(!dt_masks_get_source_area(self, piece, form, &fw, &fh, &fl, &ft))
           {
-            forms = g_list_next(forms);
             continue;
           }
           fw *= roi_in->scale, fh *= roi_in->scale, fl *= roi_in->scale, ft *= roi_in->scale;
@@ -2458,7 +2442,6 @@ static void rt_extend_roi_in_from_source_clones(struct dt_iop_module_t *self, st
           int dx = 0, dy = 0;
           if(!rt_masks_get_delta_to_destination(self, piece, roi_in, form, &dx, &dy))
           {
-            forms = g_list_next(forms);
             continue;
           }
 
@@ -2484,8 +2467,6 @@ static void rt_extend_roi_in_from_source_clones(struct dt_iop_module_t *self, st
           }
         }
       }
-
-      forms = g_list_next(forms);
     }
   }
 
@@ -2512,8 +2493,7 @@ static void rt_extend_roi_in_for_clone(struct dt_iop_module_t *self, struct dt_d
   const dt_masks_form_t *grp = dt_masks_get_from_id_ext(piece->pipe->forms, bp->mask_id);
   if(grp && (grp->type & DT_MASKS_GROUP))
   {
-    GList *forms = g_list_first(grp->points);
-    while(forms)
+    for(const GList *forms = grp->points; forms; forms = g_list_next(forms))
     {
       dt_masks_point_group_t *grpt = (dt_masks_point_group_t *)forms->data;
       if(grpt)
@@ -2523,7 +2503,6 @@ static void rt_extend_roi_in_for_clone(struct dt_iop_module_t *self, struct dt_d
 
         if(algo != DT_IOP_RETOUCH_HEAL && algo != DT_IOP_RETOUCH_CLONE)
         {
-          forms = g_list_next(forms);
           continue;
         }
 
@@ -2531,7 +2510,6 @@ static void rt_extend_roi_in_for_clone(struct dt_iop_module_t *self, struct dt_d
         dt_masks_form_t *form = dt_masks_get_from_id_ext(piece->pipe->forms, formid);
         if(form == NULL)
         {
-          forms = g_list_next(forms);
           continue;
         }
 
@@ -2539,7 +2517,6 @@ static void rt_extend_roi_in_for_clone(struct dt_iop_module_t *self, struct dt_d
         int fl_src, ft_src, fw_src, fh_src;
         if(!dt_masks_get_source_area(self, piece, form, &fw_src, &fh_src, &fl_src, &ft_src))
         {
-          forms = g_list_next(forms);
           continue;
         }
 
@@ -2552,8 +2529,6 @@ static void rt_extend_roi_in_for_clone(struct dt_iop_module_t *self, struct dt_d
           rt_extend_roi_in_from_source_clones(self, piece, roi_in, formid, fl_src, ft_src, fw_src, fh_src, &roir,
                                               &roib, &roix, &roiy);
       }
-
-      forms = g_list_next(forms);
     }
   }
 
@@ -3299,14 +3274,12 @@ static void rt_process_forms(float *layer, dwt_params_t *const wt_p, const int s
     const dt_masks_form_t *grp = dt_masks_get_from_id_ext(piece->pipe->forms, bp->mask_id);
     if(grp && (grp->type & DT_MASKS_GROUP))
     {
-      GList *forms = g_list_first(grp->points);
-      while(forms)
+      for(const GList *forms = grp->points; forms; forms = g_list_next(forms))
       {
         const dt_masks_point_group_t *grpt = (dt_masks_point_group_t *)forms->data;
         if(grpt == NULL)
         {
           fprintf(stderr, "rt_process_forms: invalid form\n");
-          forms = g_list_next(forms);
           continue;
         }
         const int formid = grpt->formid;
@@ -3314,7 +3287,6 @@ static void rt_process_forms(float *layer, dwt_params_t *const wt_p, const int s
         if(formid == 0)
         {
           fprintf(stderr, "rt_process_forms: form is null\n");
-          forms = g_list_next(forms);
           continue;
         }
         const int index = rt_get_index_from_formid(p, formid);
@@ -3322,14 +3294,12 @@ static void rt_process_forms(float *layer, dwt_params_t *const wt_p, const int s
         {
           // FIXME: we get this error when user go back in history, so forms are the same but the array has changed
           fprintf(stderr, "rt_process_forms: missing form=%i from array\n", formid);
-          forms = g_list_next(forms);
           continue;
         }
 
         // only process current scale
         if(p->rt_forms[index].scale != scale)
         {
-          forms = g_list_next(forms);
           continue;
         }
 
@@ -3338,14 +3308,12 @@ static void rt_process_forms(float *layer, dwt_params_t *const wt_p, const int s
         if(form == NULL)
         {
           fprintf(stderr, "rt_process_forms: missing form=%i from masks\n", formid);
-          forms = g_list_next(forms);
           continue;
         }
 
         // if the form is outside the roi, we just skip it
         if(!rt_masks_form_is_in_roi(self, piece, form, roi_layer, roi_layer))
         {
-          forms = g_list_next(forms);
           continue;
         }
 
@@ -3357,7 +3325,6 @@ static void rt_process_forms(float *layer, dwt_params_t *const wt_p, const int s
         if(mask == NULL)
         {
           fprintf(stderr, "rt_process_forms: error retrieving mask\n");
-          forms = g_list_next(forms);
           continue;
         }
 
@@ -3369,7 +3336,6 @@ static void rt_process_forms(float *layer, dwt_params_t *const wt_p, const int s
         {
           if(!rt_masks_get_delta_to_destination(self, piece, roi_layer, form, &dx, &dy))
           {
-            forms = g_list_next(forms);
             if(mask) dt_free_align(mask);
             continue;
           }
@@ -3390,7 +3356,6 @@ static void rt_process_forms(float *layer, dwt_params_t *const wt_p, const int s
 
         if(mask_scaled == NULL)
         {
-          forms = g_list_next(forms);
           continue;
         }
 
@@ -3440,8 +3405,6 @@ static void rt_process_forms(float *layer, dwt_params_t *const wt_p, const int s
 
         if(mask) dt_free_align(mask);
         if(mask_scaled) dt_free_align(mask_scaled);
-
-        forms = g_list_next(forms);
       }
     }
   }
@@ -4112,14 +4075,12 @@ static cl_int rt_process_forms_cl(cl_mem dev_layer, dwt_params_cl_t *const wt_p,
     dt_masks_form_t *grp = dt_masks_get_from_id_ext(piece->pipe->forms, bp->mask_id);
     if(grp && (grp->type & DT_MASKS_GROUP))
     {
-      GList *forms = g_list_first(grp->points);
-      while(forms && err == CL_SUCCESS)
+      for(const GList *forms = grp->points; forms && err == CL_SUCCESS; forms = g_list_next(forms))
       {
         dt_masks_point_group_t *grpt = (dt_masks_point_group_t *)forms->data;
         if(grpt == NULL)
         {
           fprintf(stderr, "rt_process_forms: invalid form\n");
-          forms = g_list_next(forms);
           continue;
         }
         const int formid = grpt->formid;
@@ -4127,7 +4088,6 @@ static cl_int rt_process_forms_cl(cl_mem dev_layer, dwt_params_cl_t *const wt_p,
         if(formid == 0)
         {
           fprintf(stderr, "rt_process_forms: form is null\n");
-          forms = g_list_next(forms);
           continue;
         }
         const int index = rt_get_index_from_formid(p, formid);
@@ -4135,14 +4095,12 @@ static cl_int rt_process_forms_cl(cl_mem dev_layer, dwt_params_cl_t *const wt_p,
         {
           // FIXME: we get this error when user go back in history, so forms are the same but the array has changed
           fprintf(stderr, "rt_process_forms: missing form=%i from array\n", formid);
-          forms = g_list_next(forms);
           continue;
         }
 
         // only process current scale
         if(p->rt_forms[index].scale != scale)
         {
-          forms = g_list_next(forms);
           continue;
         }
 
@@ -4151,14 +4109,12 @@ static cl_int rt_process_forms_cl(cl_mem dev_layer, dwt_params_cl_t *const wt_p,
         if(form == NULL)
         {
           fprintf(stderr, "rt_process_forms: missing form=%i from masks\n", formid);
-          forms = g_list_next(forms);
           continue;
         }
 
         // if the form is outside the roi, we just skip it
         if(!rt_masks_form_is_in_roi(self, piece, form, roi_layer, roi_layer))
         {
-          forms = g_list_next(forms);
           continue;
         }
 
@@ -4170,7 +4126,6 @@ static cl_int rt_process_forms_cl(cl_mem dev_layer, dwt_params_cl_t *const wt_p,
         if(mask == NULL)
         {
           fprintf(stderr, "rt_process_forms: error retrieving mask\n");
-          forms = g_list_next(forms);
           continue;
         }
 
@@ -4182,7 +4137,6 @@ static cl_int rt_process_forms_cl(cl_mem dev_layer, dwt_params_cl_t *const wt_p,
         {
           if(!rt_masks_get_delta_to_destination(self, piece, roi_layer, form, &dx, &dy))
           {
-            forms = g_list_next(forms);
             if(mask) dt_free_align(mask);
             continue;
           }
@@ -4212,11 +4166,8 @@ static cl_int rt_process_forms_cl(cl_mem dev_layer, dwt_params_cl_t *const wt_p,
 
         if(mask_scaled == NULL && algo == DT_IOP_RETOUCH_HEAL)
         {
-          forms = g_list_next(forms);
-
           if(dev_mask_scaled) dt_opencl_release_mem_object(dev_mask_scaled);
           dev_mask_scaled = NULL;
-
           continue;
         }
 
@@ -4269,8 +4220,6 @@ static cl_int rt_process_forms_cl(cl_mem dev_layer, dwt_params_cl_t *const wt_p,
         if(mask) dt_free_align(mask);
         if(mask_scaled) dt_free_align(mask_scaled);
         if(dev_mask_scaled) dt_opencl_release_mem_object(dev_mask_scaled);
-
-        forms = g_list_next(forms);
       }
     }
   }

@@ -217,7 +217,7 @@ static void _overlays_show_popup(dt_lib_module_t *self)
 
   if(thumbs_state)
   {
-    // we write the label with the size categorie
+    // we write the label with the size category
     gchar *txt = dt_util_dstrcat(NULL, "%s %d (%d %s)", _("thumbnails overlays for size"),
                                  dt_ui_thumbtable(darktable.gui->ui)->prefs_size,
                                  dt_ui_thumbtable(darktable.gui->ui)->thumb_size, _("px"));
@@ -384,9 +384,9 @@ void gui_init(dt_lib_module_t *self)
     gtk_widget_set_tooltip_text(d->grouping_button, _("expand grouped images"));
   else
     gtk_widget_set_tooltip_text(d->grouping_button, _("collapse grouped images"));
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(d->grouping_button), darktable.gui->grouping);
   g_signal_connect(G_OBJECT(d->grouping_button), "clicked", G_CALLBACK(_lib_filter_grouping_button_clicked),
                    NULL);
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(d->grouping_button), darktable.gui->grouping);
 
   /* create the "show/hide overlays" button */
   d->overlays_button = dtgtk_button_new(dtgtk_cairo_paint_overlays, CPF_STYLE_FLAT, NULL);
@@ -584,7 +584,7 @@ static void _main_do_event(GdkEvent *event, gpointer data)
           char *base_url = dt_conf_get_string("context_help/url");
           // if url is https://www.darktable.org/usermanual/, it is the old deprecated
           // url and we need to update it
-          if(!base_url || !*base_url || (0 == strcmp(base_url, "https://www.darktable.org/usermanual/")))
+          if(!base_url || !*base_url || (0 == strcmp(base_url, "https://darktable.gitlab.io/doc/")))
           {
             g_free(base_url);
             base_url = NULL;
@@ -592,7 +592,7 @@ static void _main_do_event(GdkEvent *event, gpointer data)
             // ask the user if darktable.org may be accessed
             GtkWidget *dialog = gtk_message_dialog_new(GTK_WINDOW(win), GTK_DIALOG_DESTROY_WITH_PARENT,
                                                        GTK_MESSAGE_QUESTION, GTK_BUTTONS_YES_NO,
-                                                       _("do you want to access https://darktable.gitlab.io/doc/?"));
+                                                       _("do you want to access https://darktable.org/usermanual/?"));
 #ifdef GDK_WINDOWING_QUARTZ
             dt_osx_disallow_fullscreen(dialog);
 #endif
@@ -602,7 +602,7 @@ static void _main_do_event(GdkEvent *event, gpointer data)
             gtk_widget_destroy(dialog);
             if(res == GTK_RESPONSE_YES)
             {
-              base_url = g_strdup("https://darktable.gitlab.io/doc/");
+              base_url = g_strdup("https://darktable.org/usermanual/");
               dt_conf_set_string("context_help/url", base_url);
             }
           }
@@ -620,7 +620,7 @@ static void _main_do_event(GdkEvent *event, gpointer data)
                 lang = language->code;
               // array of languages the usermanual supports.
               // NULL MUST remain the last element of the array
-              const char *supported_languages[] = { "en", "fr", "it", "es", "de", "pl", NULL };
+              const char *supported_languages[] = { "en", NULL }; // "fr", "it", "es", "de", "pl", NULL };
               int i = 0;
               while(supported_languages[i])
               {
@@ -793,10 +793,12 @@ void init(struct dt_lib_module_t *self)
   dt_lua_type_register_type(L, my_type, "show_overlays");
 
   lua_pushcfunction(L, dt_lua_event_multiinstance_register);
+  lua_pushcfunction(L, dt_lua_event_multiinstance_destroy);
   lua_pushcfunction(L, dt_lua_event_multiinstance_trigger);
   dt_lua_event_add(L, "global_toolbox-grouping_toggle");
 
   lua_pushcfunction(L, dt_lua_event_multiinstance_register);
+  lua_pushcfunction(L, dt_lua_event_multiinstance_destroy);
   lua_pushcfunction(L, dt_lua_event_multiinstance_trigger);
   dt_lua_event_add(L, "global_toolbox-overlay_toggle");
 }

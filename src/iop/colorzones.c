@@ -826,13 +826,13 @@ static void _draw_color_picker(dt_iop_module_t *self, cairo_t *cr, dt_iop_colorz
           = dt_ioppr_get_histogram_profile_info(self->dev);
       const dt_iop_order_iccprofile_info_t *const work_profile
           = dt_ioppr_get_iop_work_profile_info(self, self->dev->iop);
-      float pick_mean[4], pick_min[4], pick_max[4];
+      float DT_ALIGNED_PIXEL pick_mean[4], pick_min[4], pick_max[4];
       int converted_cst;
 
       if(work_profile && histogram_profile)
       {
         dt_colorpicker_sample_t *sample = NULL;
-        while(samples)
+        for(; samples; samples = g_slist_next(samples))
         {
           sample = samples->data;
 
@@ -899,8 +899,6 @@ static void _draw_color_picker(dt_iop_module_t *self, cairo_t *cr, dt_iop_colorz
           cairo_move_to(cr, width * picked_i, 0);
           cairo_line_to(cr, width * picked_i, height);
           cairo_stroke(cr);
-
-          samples = g_slist_next(samples);
         }
       }
     }
@@ -1567,12 +1565,11 @@ static gboolean _move_point_internal(dt_iop_module_t *self, GtkWidget *widget, f
 
   float multiplier;
 
-  GdkModifierType modifiers = gtk_accelerator_get_default_mod_mask();
-  if((state & modifiers) == GDK_SHIFT_MASK)
+  if(dt_modifier_is(state, GDK_SHIFT_MASK))
   {
     multiplier = dt_conf_get_float("darkroom/ui/scale_rough_step_multiplier");
   }
-  else if((state & modifiers) == GDK_CONTROL_MASK)
+  else if(dt_modifier_is(state, GDK_CONTROL_MASK))
   {
     multiplier = dt_conf_get_float("darkroom/ui/scale_precise_step_multiplier");
   }
@@ -1903,12 +1900,12 @@ static gboolean _area_button_press_callback(GtkWidget *widget, GdkEventButton *e
 
   if(event->button == 1)
   {
-    if(c->edit_by_area && event->type != GDK_2BUTTON_PRESS && (event->state & GDK_CONTROL_MASK) != GDK_CONTROL_MASK)
+    if(c->edit_by_area && event->type != GDK_2BUTTON_PRESS && !dt_modifier_is(event->state, GDK_CONTROL_MASK))
     {
       c->dragging = 1;
       return TRUE;
     }
-    else if(event->type == GDK_BUTTON_PRESS && (event->state & GDK_CONTROL_MASK) == GDK_CONTROL_MASK
+    else if(event->type == GDK_BUTTON_PRESS && dt_modifier_is(event->state, GDK_CONTROL_MASK)
             && nodes < DT_IOP_COLORZONES_MAXNODES && (c->selected == -1 || c->edit_by_area))
     {
       // if we are not on a node -> add a new node at the current x of the pointer and y of the curve at that x
@@ -2008,7 +2005,7 @@ static gboolean _area_button_press_callback(GtkWidget *widget, GdkEventButton *e
     }
 
     // ctrl+right click reset the node to y-zero
-    if((event->state & GDK_CONTROL_MASK) == GDK_CONTROL_MASK)
+    if(dt_modifier_is(event->state, GDK_CONTROL_MASK))
     {
       curve[c->selected].y = 0.5f;
     }
@@ -2243,9 +2240,9 @@ void color_picker_apply(dt_iop_module_t *self, GtkWidget *picker, dt_dev_pixelpi
 
     const GdkModifierType state = dt_key_modifier_state();
     int picker_set_upper_lower; // flat=0, lower=-1, upper=1
-    if(state == GDK_CONTROL_MASK)
+    if(dt_modifier_is(state, GDK_CONTROL_MASK))
       picker_set_upper_lower = 1;
-    else if(state == GDK_SHIFT_MASK)
+    else if(dt_modifier_is(state, GDK_SHIFT_MASK))
       picker_set_upper_lower = -1;
     else
       picker_set_upper_lower = 0;
@@ -2387,7 +2384,7 @@ void gui_init(struct dt_iop_module_t *self)
   g_signal_connect(G_OBJECT(c->colorpicker_set_values), "toggled", G_CALLBACK(_color_picker_callback), self);
 
   // the nice graph
-  c->area = GTK_DRAWING_AREA(dtgtk_drawing_area_new_with_aspect_ratio(1.0));
+  c->area = GTK_DRAWING_AREA(dtgtk_drawing_area_new_with_aspect_ratio(9.0 / 16.0));
   gtk_box_pack_start(GTK_BOX(vbox), GTK_WIDGET(c->area), TRUE, TRUE, 0);
 
   GtkWidget *dabox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);

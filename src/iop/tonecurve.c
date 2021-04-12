@@ -1043,12 +1043,11 @@ static gboolean _move_point_internal(dt_iop_module_t *self, GtkWidget *widget, f
 
   float multiplier;
 
-  GdkModifierType modifiers = gtk_accelerator_get_default_mod_mask();
-  if((state & modifiers) == GDK_SHIFT_MASK)
+  if(dt_modifier_is(state, GDK_SHIFT_MASK))
   {
     multiplier = dt_conf_get_float("darkroom/ui/scale_rough_step_multiplier");
   }
-  else if((state & modifiers) == GDK_CONTROL_MASK)
+  else if(dt_modifier_is(state, GDK_CONTROL_MASK))
   {
     multiplier = dt_conf_get_float("darkroom/ui/scale_precise_step_multiplier");
   }
@@ -1434,13 +1433,11 @@ static gboolean dt_iop_tonecurve_draw(GtkWidget *widget, cairo_t *crf, gpointer 
        gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(c->colorpicker)))
     {
       // the global live samples ...
-      GSList *samples = darktable.lib->proxy.colorpicker.live_samples;
-      dt_colorpicker_sample_t *sample = NULL;
       cairo_set_line_width(cr, DT_PIXEL_APPLY_DPI(3));
 
-      while(samples)
+      for(GSList *samples = darktable.lib->proxy.colorpicker.live_samples; samples; samples = g_slist_next(samples))
       {
-        sample = samples->data;
+        dt_colorpicker_sample_t *sample = samples->data;
 
         picker_scale(sample->picked_color_lab_mean, picker_mean);
         picker_scale(sample->picked_color_lab_min, picker_min);
@@ -1459,8 +1456,6 @@ static gboolean dt_iop_tonecurve_draw(GtkWidget *widget, cairo_t *crf, gpointer 
         cairo_move_to(cr, width * picker_mean[ch], 0);
         cairo_line_to(cr, width * picker_mean[ch], -height);
         cairo_stroke(cr);
-
-        samples = g_slist_next(samples);
       }
 
       // ... and the local sample
@@ -1724,7 +1719,7 @@ static gboolean dt_iop_tonecurve_button_press(GtkWidget *widget, GdkEventButton 
 
   if(event->button == 1)
   {
-    if(event->type == GDK_BUTTON_PRESS && (event->state & GDK_CONTROL_MASK) == GDK_CONTROL_MASK
+    if(event->type == GDK_BUTTON_PRESS && dt_modifier_is(event->state, GDK_CONTROL_MASK)
        && nodes < DT_IOP_TONECURVE_MAXNODES && c->selected == -1)
     {
       // if we are not on a node -> add a new node at the current x of the pointer and y of the curve at that x

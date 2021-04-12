@@ -394,7 +394,7 @@ void process(dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, const void *c
 
   dt_pthread_mutex_unlock(&darktable.plugin_threadsafe);
 
-  const struct dt_interpolation *const interpolation = dt_interpolation_new(DT_INTERPOLATION_USERPREF);
+  const struct dt_interpolation *const interpolation = dt_interpolation_new(DT_INTERPOLATION_USERPREF_WARP);
 
   if(d->inverse)
   {
@@ -416,7 +416,7 @@ void process(dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, const void *c
 #endif
       for(int y = 0; y < roi_out->height; y++)
       {
-        float *bufptr = dt_get_perthread(buf, padded_bufsize);
+        float *bufptr = (float*)dt_get_perthread(buf, padded_bufsize);
         modifier->ApplySubpixelGeometryDistortion(roi_out->x, roi_out->y + y, roi_out->width, 1, bufptr);
 
         // reverse transform the global coords from lf to our buffer
@@ -521,7 +521,7 @@ void process(dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, const void *c
 #endif
       for(int y = 0; y < roi_out->height; y++)
       {
-        float *buf2ptr = dt_get_perthread(buf2, padded_buf2size);
+        float *buf2ptr = (float*)dt_get_perthread(buf2, padded_buf2size);
         modifier->ApplySubpixelGeometryDistortion(roi_out->x, roi_out->y + y, roi_out->width,
                                                   1, buf2ptr);
         // reverse transform the global coords from lf to our buffer
@@ -619,7 +619,7 @@ int process_cl(struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, cl_m
 
   int modflags;
   int ldkernel = -1;
-  const struct dt_interpolation *interpolation = dt_interpolation_new(DT_INTERPOLATION_USERPREF);
+  const struct dt_interpolation *interpolation = dt_interpolation_new(DT_INTERPOLATION_USERPREF_WARP);
 
   if(!d->lens || !d->lens->Maker || d->crop <= 0.0f)
   {
@@ -951,7 +951,7 @@ void distort_mask(struct dt_iop_module_t *self, struct dt_dev_pixelpipe_iop_t *p
     return;
   }
 
-  const struct dt_interpolation *const interpolation = dt_interpolation_new(DT_INTERPOLATION_USERPREF);
+  const struct dt_interpolation *const interpolation = dt_interpolation_new(DT_INTERPOLATION_USERPREF_WARP);
 
   // acquire temp memory for distorted pixel coords
   const size_t bufsize = (size_t)roi_out->width * 2 * 3;
@@ -967,7 +967,7 @@ void distort_mask(struct dt_iop_module_t *self, struct dt_dev_pixelpipe_iop_t *p
 #endif
   for(int y = 0; y < roi_out->height; y++)
   {
-    float *bufptr = dt_get_perthread(buf, padded_bufsize);
+    float *bufptr = (float*)dt_get_perthread(buf, padded_bufsize);
     modifier->ApplySubpixelGeometryDistortion(roi_out->x, roi_out->y + y, roi_out->width, 1, bufptr);
 
     // reverse transform the global coords from lf to our buffer
@@ -1083,7 +1083,7 @@ void modify_roi_in(struct dt_iop_module_t *self, struct dt_dev_pixelpipe_iop_t *
     if(!isfinite(ym) || !(0 <= ym && ym < orig_h)) ym = 0;
     if(!isfinite(yM) || !(1 <= yM && yM < orig_h)) yM = orig_h;
 
-    const struct dt_interpolation *interpolation = dt_interpolation_new(DT_INTERPOLATION_USERPREF);
+    const struct dt_interpolation *interpolation = dt_interpolation_new(DT_INTERPOLATION_USERPREF_WARP);
     roi_in->x = fmaxf(0.0f, xm - interpolation->width);
     roi_in->y = fmaxf(0.0f, ym - interpolation->width);
     roi_in->width = fminf(orig_w - roi_in->x, xM - roi_in->x + interpolation->width);
@@ -2083,10 +2083,8 @@ static void modflags_changed(GtkWidget *widget, gpointer user_data)
   dt_iop_lensfun_params_t *p = (dt_iop_lensfun_params_t *)self->params;
   dt_iop_lensfun_gui_data_t *g = (dt_iop_lensfun_gui_data_t *)self->gui_data;
   int pos = dt_bauhaus_combobox_get(widget);
-  GList *modifiers = g->modifiers;
-  while(modifiers)
+  for(GList *modifiers = g->modifiers;  modifiers; modifiers = g_list_next(modifiers))
   {
-    // could use g_list_nth. this seems safer?
     dt_iop_lensfun_modifier_t *mm = (dt_iop_lensfun_modifier_t *)modifiers->data;
     if(mm->pos == pos)
     {
@@ -2095,7 +2093,6 @@ static void modflags_changed(GtkWidget *widget, gpointer user_data)
       dt_dev_add_history_item(darktable.develop, self, TRUE);
       break;
     }
-    modifiers = g_list_next(modifiers);
   }
 }
 
@@ -2204,17 +2201,14 @@ static void corrections_done(gpointer instance, gpointer user_data)
 
   const char empty_message[] = "";
   char *message = (char *)empty_message;
-  GList *modifiers = g->modifiers;
-  while(modifiers && self->enabled)
+  for(GList *modifiers = g->modifiers; modifiers && self->enabled; modifiers = g_list_next(modifiers))
   {
-    // could use g_list_nth. this seems safer?
     dt_iop_lensfun_modifier_t *mm = (dt_iop_lensfun_modifier_t *)modifiers->data;
     if(mm->modflag == corrections_done)
     {
       message = mm->name;
       break;
     }
-    modifiers = g_list_next(modifiers);
   }
 
   ++darktable.gui->reset;
@@ -2438,17 +2432,14 @@ void gui_update(struct dt_iop_module_t *self)
   gtk_widget_set_tooltip_text(g->lens_model, "");
 
   int modflag = p->modify_flags & LENSFUN_MODFLAG_MASK;
-  GList *modifiers = g->modifiers;
-  while(modifiers)
+  for(GList *modifiers = g->modifiers; modifiers; modifiers = g_list_next(modifiers))
   {
-    // could use g_list_nth. this seems safer?
     dt_iop_lensfun_modifier_t *mm = (dt_iop_lensfun_modifier_t *)modifiers->data;
     if(mm->modflag == modflag)
     {
       dt_bauhaus_combobox_set(g->modflags, mm->pos);
       break;
     }
-    modifiers = g_list_next(modifiers);
   }
 
   dt_bauhaus_combobox_set(g->target_geom, p->target_geom - LF_UNKNOWN - 1);

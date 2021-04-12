@@ -7,30 +7,38 @@ darktable is an open source photography workflow application and non-destructive
 
 ## Table of Contents
 
-1. [Requirements](#requirements)
+1. [Documentation](#documentation)
+2. [Requirements](#requirements)
    - [Supported platforms](#supported-platforms)
    - [Hardware](#hardware)
-2. [Installing](#installing)
+3. [Installing](#installing)
    - [Latest release](#latest-release)
    - [Development snapshot](#development-snapshot)
-2. [Updating from older versions](#updating-from-older-versions)
-3. [Getting extensions](#getting-extensions)
-4. [Building](#building)
+4. [Updating from older versions](#updating-from-older-versions)
+5. [Getting extensions](#getting-extensions)
+6. [Building](#building)
    - [Dependencies](#dependencies)
    - [Get the source](#get-the-source)
    - [Get submodules](#get-submodules)
    - [Compile](#compile)
    - [Further reading](#further-reading)
-5. [Using](#using)
+7. [Using](#using)
    - [Test/unstable version](#testunstable-version)
    - [Regular/stable version](#regularstable-version)
-6. [Contributing](#contributing)
-7. [FAQ](#faq)
+8. [Contributing](#contributing)
+9. [FAQ](#faq)
    - [Why is my camera not detected when plugged-in ?](#why-is-my-camera-not-detected-when-plugged-in-)
    - [Why is my lens not detected/corrected in darkroom ?](#why-is-my-lens-not-detectedcorrected-in-darkroom-)
    - [Why are the thumbnails in lighttable looking different than the preview in darkroom ?](#why-are-the-thumbnails-in-lighttable-looking-different-than-the-preview-in-darkroom-)
-8. [Wiki](#wiki)
-9. [Mailing lists](#mailing-lists)
+10. [Wiki](#wiki)
+11. [Mailing lists](#mailing-lists)
+
+Documentation
+-------------
+
+The darktable user manual is maintained in the [dtdocs](https://github.com/darktable-org/dtdocs) repository. 
+
+Lua API documentation is maintained in the [luadocs](https://github.com/darktable-org/luadocs) repository.
 
 Requirements
 ------------
@@ -69,10 +77,10 @@ you can build the software yourself following the instructions [below](#building
 
 ### Latest release
 
-3.4.0 (stable)
+3.4.1 (stable)
 
-* [Download executable for Windows](https://github.com/darktable-org/darktable/releases/download/release-3.4.0/darktable-3.4.0-win64.exe)
-* [Download executable for Mac OS](https://github.com/darktable-org/darktable/releases/download/release-3.4.0/darktable-3.4.0.dmg)
+* [Download executable for Windows](https://github.com/darktable-org/darktable/releases/download/release-3.4.1/darktable-3.4.1.1-win64.exe)
+* [Download executable for Mac OS](https://github.com/darktable-org/darktable/releases/download/release-3.4.1/darktable-3.4.1.dmg)
 * [Install native packages and repositories for Linux](https://software.opensuse.org/download.html?project=graphics:darktable&package=darktable)
 * [Install Flatpak package for Linux](https://flathub.org/apps/details/org.darktable.Darktable)
 * [More information about installing darktable on any system](https://www.darktable.org/install/)
@@ -84,7 +92,7 @@ Noticeably, some Flatpak, Snap and Appimage packages lack OpenCL and Lua support
 
 ### Development snapshot
 
-The development snapshot is the state of the master branch at current time. It is intended for testing and is generaly not safe. See the notes [below](#get-the-source) for warnings and precautions about using the master branch.
+The development snapshot is the state of the master branch at current time. It is intended for testing and is generally not safe. See the notes [below](#get-the-source) for warnings and precautions about using the master branch.
 
 * [Install native packages and repositories for Linux](https://software.opensuse.org/download.html?project=graphics:darktable:master&package=darktable) (one snapshot per day).
 * No precompiled packages are provided for the master branch on MacOS and Windows. See how to build it manually below.
@@ -101,7 +109,7 @@ be prompted with a request to either upgrade the database or to close the softwa
 
 **The migration to a newer database structure/newer release means new and old edits 
 will not be compatible anymore with older versions of darktable.** Upgrades are definitive.
-Newer versions are always compatible with older edits, but newer edits are generaly 
+Newer versions are always compatible with older edits, but newer edits are generally 
 not compatible with older versions.
 
 darktable automatically backs up the library database when a new version upgrades it 
@@ -217,7 +225,7 @@ which is fine if you don't need to open your edits again in the future, but mayb
 After backing up your `~/.config/darktable` directory as well as the sidecar .XMP files of the pictures you will open
 with the master branch, you may get the source:
 ```bash
-git clone --recurse-submodules https://github.com/darktable-org/darktable.git
+git clone --recurse-submodules --depth 1 https://github.com/darktable-org/darktable.git
 cd darktable
 ```
 
@@ -225,17 +233,17 @@ See below (in "Using") how to start a test install of the unstable version witho
 
 #### Latest stable release
 
-3.4.0
+3.4.1
 
 darktable project releases one major version every year, for Christmas, tagged with even numbers, (like 2.2, 2.4, 2.6, 3.0). 
 Minor revisions are tagged with a third digit (like 3.0.1, 3.0.2) and mostly provide bug fixes and minor new features.
 You may want to compile these stable releases yourself in order to get better performance for your particular computer:
 
 ```bash
-git clone --recurse-submodules https://github.com/darktable-org/darktable.git 
+git clone --recurse-submodules --depth 1 https://github.com/darktable-org/darktable.git
 cd darktable
 git fetch --tags
-git checkout tags/release-3.4.0
+git checkout tags/release-3.4.1
 ```
 
 ### Get submodules
@@ -251,9 +259,11 @@ git submodule update --init
 #### Easy way
 
 WARNING: in case you have already built darktable in the past, don't forget to remove entirely (`rm -R`) the `build` 
-and `/opt/darktable` directories to avoid conflicting files from different versions.
+and `/opt/darktable` directories to avoid conflicting files from different versions. Many weird behaviours and transient 
+bugs have been reported that can be tracked down to the building cache not properly invalidating the changed dependencies, so 
+the safest way is to completely remove previously built binaries and restart from scratch. 
 
-darktable provides a shell script that automaticaly takes care of the building on Linux and MacOS for classic cases in a single command. 
+darktable provides a shell script that automatically takes care of the building on Linux and MacOS for classic cases in a single command. 
 
 
 ```bash
@@ -289,7 +299,7 @@ sudo make install
 
 ##### Windows
 
-See https://github.com/darktable-org/darktable/blob/master/packaging/windows/BUILD.txt
+See https://github.com/darktable-org/darktable/blob/master/packaging/windows/BUILD.md
 
 ### Using
 
@@ -307,14 +317,14 @@ the test/unstable one in `~/.config/darktable-test`, so they will not produce da
 
 #### Regular/stable version
 
-Simply lauch it from your desktop application menu, or in terminal, run `darktable` or `/opt/darktable/bin/darktable`. If the installation did not create a launcher in your applications menu, run:
+Simply launch it from your desktop application menu, or in terminal, run `darktable` or `/opt/darktable/bin/darktable`. If the installation did not create a launcher in your applications menu, run:
 
 ```
 sudo ln -s /opt/darktable/share/applications/darktable.desktop /usr/share/applications/darktable.desktop
 ```
 
 You may find darktable configuration files in `~/.config/darktable`.
-In case you are having crashes at startup, try lauching darktable without OpenCL with `darktable --conf opencl=FALSE`.
+In case you are having crashes at startup, try launching darktable without OpenCL with `darktable --conf opencl=FALSE`.
 
 ### Further reading
 

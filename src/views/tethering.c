@@ -219,7 +219,7 @@ static void _expose_tethered_mode(dt_view_t *self, cairo_t *cr, int32_t width, i
 
   lib->image_over = DT_VIEW_DESERT;
   GSList *l = dt_view_active_images_get();
-  if(g_slist_length(l) > 0) lib->image_id = GPOINTER_TO_INT(g_slist_nth_data(l, 0));
+  if(l) lib->image_id = GPOINTER_TO_INT(l->data);
 
   lib->image_over = lib->image_id;
 
@@ -254,14 +254,19 @@ static void _expose_tethered_mode(dt_view_t *self, cairo_t *cr, int32_t width, i
             scale = fminf(w / pw, h / ph);
           else
             scale = fminf(w / ph, h / pw);
-          scale = fminf(1.0, scale);
+
+          // ensure some sanity on the scale factor
+          scale = fminf(10.0, scale);
 
           // FIXME: use cairo_pattern_set_filter()?
           cairo_translate(cr, width * 0.5, (height + BAR_HEIGHT) * 0.5); // origin to middle of canvas
-          if(cam->live_view_flip == TRUE) cairo_scale(cr, -1.0, 1.0);    // mirror image
-          if(cam->live_view_rotation) cairo_rotate(cr, -M_PI_2 * cam->live_view_rotation); // rotate around middle
-          if(cam->live_view_zoom == FALSE) cairo_scale(cr, scale, scale);                  // scale to fit canvas
-          cairo_translate(cr, -0.5 * pw, -0.5 * ph);                                       // origin back to corner
+          if(cam->live_view_flip == TRUE)
+            cairo_scale(cr, -1.0, 1.0);    // mirror image
+          if(cam->live_view_rotation)
+            cairo_rotate(cr, -M_PI_2 * cam->live_view_rotation); // rotate around middle
+          if(cam->live_view_zoom == FALSE)
+            cairo_scale(cr, scale, scale);                  // scale to fit canvas
+          cairo_translate(cr, -0.5 * pw, -0.5 * ph);        // origin back to corner
           cairo_scale(cr, darktable.gui->ppd, darktable.gui->ppd);
           cairo_set_source_surface(cr, source, 0.0, 0.0);
           cairo_paint(cr);
@@ -423,14 +428,11 @@ void expose(dt_view_t *self, cairo_t *cri, int32_t width, int32_t height, int32_
   cairo_restore(cri);
 
   // post expose to modules
-  GList *modules = darktable.lib->plugins;
-
-  while(modules)
+  for(const GList *modules = darktable.lib->plugins; modules; modules = g_list_next(modules))
   {
     dt_lib_module_t *module = (dt_lib_module_t *)(modules->data);
     if(module->gui_post_expose && dt_lib_is_visible_in_view(module, self))
       module->gui_post_expose(module, cri, width, height, pointerx, pointery);
-    modules = g_list_next(modules);
   }
 }
 
@@ -463,7 +465,7 @@ static const char *_camera_request_image_filename(const dt_camera_t *camera, con
   struct dt_capture_t *lib = (dt_capture_t *)data;
 
   /* update import session with original filename so that $(FILE_EXTENSION)
-   *     and alikes can be expanded. */
+   *     and alike can be expanded. */
   dt_import_session_set_filename(lib->session, filename);
   const gchar *file = dt_import_session_filename(lib->session, FALSE);
 
@@ -495,10 +497,7 @@ void enter(dt_view_t *self)
   // no active image when entering the tethering view
   lib->image_over = DT_VIEW_DESERT;
   GSList *l = dt_view_active_images_get();
-  if(g_slist_length(l) > 0)
-    lib->image_id = GPOINTER_TO_INT(g_slist_nth_data(l, 0));
-  else
-    lib->image_id = -1;
+  lib->image_id = l ? GPOINTER_TO_INT(l->data) : -1;
 
   dt_view_active_images_reset(FALSE);
   dt_view_active_images_add(lib->image_id, TRUE);

@@ -222,6 +222,8 @@ void gui_reset(dt_imageio_module_storage_t *self)
   disk_t *d = (disk_t *)self->gui_data;
   // global default can be annoying:
   // gtk_entry_set_text(GTK_ENTRY(d->entry), "$(FILE_FOLDER)/darktable_exported/$(FILE_NAME)");
+  gtk_entry_set_text(d->entry, dt_confgen_get("plugins/imageio/storage/disk/file_directory", DT_DEFAULT));
+  dt_bauhaus_combobox_set(d->onsave_action, dt_confgen_get_int("plugins/imageio/storage/disk/overwrite", DT_DEFAULT));
   dt_conf_set_string("plugins/imageio/storage/disk/file_directory", gtk_entry_get_text(d->entry));
   dt_conf_set_int("plugins/imageio/storage/disk/overwrite", dt_bauhaus_combobox_get(d->onsave_action));
 }
@@ -396,7 +398,7 @@ int set_params(dt_imageio_module_storage_t *self, const void *params, const int 
 char *ask_user_confirmation(dt_imageio_module_storage_t *self)
 {
   disk_t *g = (disk_t *)self->gui_data;
-  if(dt_bauhaus_combobox_get(g->onsave_action) == DT_EXPORT_ONCONFLICT_OVERWRITE)
+  if(dt_bauhaus_combobox_get(g->onsave_action) == DT_EXPORT_ONCONFLICT_OVERWRITE && dt_conf_get_bool("plugins/lighttable/export/ask_before_export_overwrite"))
   {
     return g_strdup(_("you are going to export on overwrite mode, this will overwrite any existing images\n\n"
         "do you really want to continue?"));

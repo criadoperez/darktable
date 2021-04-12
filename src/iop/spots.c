@@ -126,8 +126,37 @@ int legacy_params(dt_iop_module_t *self, const void *const old_params, const int
 
       // and add it to the module params
       n->clone_id[i] = form->formid;
-      n->clone_algo[i] = 1;
+      n->clone_algo[i] = 2;
     }
+
+    // look for spot history num, if not found then it will be added
+    // at the end of the list.
+    int last_spot_num = 0;
+    int count = 0;
+    for(GList *l = self->dev->history; l; l = g_list_next(l))
+    {
+      dt_dev_history_item_t *item = (dt_dev_history_item_t *)l->data;
+      count++;
+      if(!strcmp(item->op_name, "spots")) last_spot_num = item->num;
+    }
+
+    if(last_spot_num == 0) last_spot_num = count;
+
+    // record all forms for this module & history num
+    // also record the group in the blend params.
+
+    dt_develop_blend_params_t *bp = self->blend_params;
+
+    for(GList *l = self->dev->forms; l; l = g_list_next(l))
+    {
+      dt_masks_form_t *form = (dt_masks_form_t *)l->data;
+      if(form && (form->type & DT_MASKS_GROUP))
+      {
+        bp->mask_id = form->formid;
+      }
+      dt_masks_write_masks_history_item(self->dev->image_storage.id, last_spot_num, form);
+    }
+
     return 0;
   }
   return 1;
@@ -146,9 +175,8 @@ static void _resynch_params(struct dt_iop_module_t *self)
   dt_masks_form_t *grp = dt_masks_get_from_id(darktable.develop, bp->mask_id);
   if(grp && (grp->type & DT_MASKS_GROUP))
   {
-    GList *forms = g_list_first(grp->points);
     int i = 0;
-    while((i < 64) && forms)
+    for(GList *forms = grp->points; (i < 64) && forms; forms = g_list_next(forms))
     {
       dt_masks_point_group_t *grpt = (dt_masks_point_group_t *)forms->data;
       nid[i] = grpt->formid;
@@ -161,7 +189,6 @@ static void _resynch_params(struct dt_iop_module_t *self)
         }
       }
       i++;
-      forms = g_list_next(forms);
     }
   }
 
@@ -215,7 +242,7 @@ static int _shape_is_being_added(dt_iop_module_t *self, const int shape_type)
   {
     if(self->dev->form_visible->type & DT_MASKS_GROUP)
     {
-      GList *forms = g_list_first(self->dev->form_visible->points);
+      GList *forms = self->dev->form_visible->points;
       if(forms)
       {
         dt_masks_point_group_t *grpt = (dt_masks_point_group_t *)forms->data;
@@ -283,8 +310,7 @@ static gboolean _add_shape_callback(GtkWidget *widget, GdkEventButton *e, dt_iop
 
   const dt_iop_spots_gui_data_t *g = (dt_iop_spots_gui_data_t *) self->gui_data;
 
-  GdkModifierType modifiers = gtk_accelerator_get_default_mod_mask();
-  const int creation_continuous = ((e->state & modifiers) == GDK_CONTROL_MASK);
+  const gboolean creation_continuous = dt_modifier_is(e->state, GDK_CONTROL_MASK);
 
   _add_shape(widget, creation_continuous, self);
 
@@ -333,7 +359,7 @@ static gboolean _edit_masks(GtkWidget *widget, GdkEventButton *e, dt_iop_module_
   dt_develop_blend_params_t *bp = self->blend_params;
   dt_masks_form_t *grp = dt_masks_get_from_id(darktable.develop, bp->mask_id);
   //only toggle shape show button if shapes exist
-  if(grp && (grp->type & DT_MASKS_GROUP) && g_list_length(grp->points) > 0)
+  if(grp && (grp->type & DT_MASKS_GROUP) && grp->points)
   {
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g->bt_edit_masks),
                                  (bd->masks_shown != DT_MASKS_EDIT_OFF) && (darktable.develop->gui_module == self));
@@ -392,8 +418,7 @@ void modify_roi_in(struct dt_iop_module_t *self, struct dt_dev_pixelpipe_iop_t *
   dt_masks_form_t *grp = dt_masks_get_from_id_ext(piece->pipe->forms, bp->mask_id);
   if(grp && (grp->type & DT_MASKS_GROUP))
   {
-    GList *forms = g_list_first(grp->points);
-    while(forms)
+    for(const GList *forms = grp->points; forms; forms = g_list_next(forms))
     {
       dt_masks_point_group_t *grpt = (dt_masks_point_group_t *)forms->data;
       // we get the spot
@@ -403,7 +428,6 @@ void modify_roi_in(struct dt_iop_module_t *self, struct dt_dev_pixelpipe_iop_t *
         // if the form is outside the roi, we just skip it
         if(!masks_form_is_in_roi(self, piece, form, roi_in, roi_out))
         {
-          forms = g_list_next(forms);
           continue;
         }
 
@@ -412,7 +436,6 @@ void modify_roi_in(struct dt_iop_module_t *self, struct dt_dev_pixelpipe_iop_t *
 
         if(!dt_masks_get_source_area(self, piece, form, &fw, &fh, &fl, &ft))
         {
-          forms = g_list_next(forms);
           continue;
         }
         fw *= roi_in->scale, fh *= roi_in->scale, fl *= roi_in->scale, ft *= roi_in->scale;
@@ -423,7 +446,6 @@ void modify_roi_in(struct dt_iop_module_t *self, struct dt_dev_pixelpipe_iop_t *
         roir = fmaxf(fl + fw, roir);
         roib = fmaxf(ft + fh, roib);
       }
-      forms = g_list_next(forms);
     }
   }
 
@@ -455,7 +477,7 @@ static int masks_point_calc_delta(dt_iop_module_t *self, dt_dev_pixelpipe_iop_t 
   masks_point_denormalize(piece, roi, target, 1, points);
   masks_point_denormalize(piece, roi, source, 1, points + 2);
 
-  int res = dt_dev_distort_transform_plus(self->dev, piece->pipe, self->iop_order, DT_DEV_TRANSFORM_DIR_BACK_INCL, points, 2);
+  const int res = dt_dev_distort_transform_plus(self->dev, piece->pipe, self->iop_order, DT_DEV_TRANSFORM_DIR_BACK_INCL, points, 2);
   if(!res) return res;
 
   *dx = points[0] - points[2];
@@ -516,30 +538,25 @@ void _process(struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, const
   int pos = 0;
   if(grp && (grp->type & DT_MASKS_GROUP))
   {
-    GList *forms = g_list_first(grp->points);
-    while((pos < 64) && forms)
+    for(const GList *forms = grp->points; (pos < 64) && forms; pos++, forms = g_list_next(forms))
     {
       dt_masks_point_group_t *grpt = (dt_masks_point_group_t *)forms->data;
       // we get the spot
       dt_masks_form_t *form = dt_masks_get_from_id_ext(piece->pipe->forms, grpt->formid);
       if(!form)
       {
-        forms = g_list_next(forms);
-        pos++;
         continue;
       }
 
       // if the form is outside the roi, we just skip it
       if(!masks_form_is_in_roi(self, piece, form, roi_in, roi_out))
       {
-        forms = g_list_next(forms);
-        pos++;
         continue;
       }
 
       if(d->clone_algo[pos] == 1 && (form->type & DT_MASKS_CIRCLE))
       {
-        dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *)g_list_nth_data(form->points, 0);
+        dt_masks_point_circle_t *circle = (dt_masks_point_circle_t *)form->points->data;
 
         float points[4];
         masks_point_denormalize(piece, roi_in, circle->center, 1, points);
@@ -547,8 +564,6 @@ void _process(struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, const
 
         if(!dt_dev_distort_transform_plus(self->dev, piece->pipe, self->iop_order, DT_DEV_TRANSFORM_DIR_BACK_INCL, points, 2))
         {
-          forms = g_list_next(forms);
-          pos++;
           continue;
         }
 
@@ -611,17 +626,16 @@ void _process(struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, const
         float *mask = NULL;
         int posx, posy, width, height;
         dt_masks_get_mask(self, piece, form, &mask, &width, &height, &posx, &posy);
-        int fts = posy * roi_in->scale, fhs = height * roi_in->scale, fls = posx * roi_in->scale,
-            fws = width * roi_in->scale;
+        const int fts = posy * roi_in->scale;
+        const int fhs = height * roi_in->scale;
+        const int fls = posx * roi_in->scale;
+        const int fws = width * roi_in->scale;
         int dx = 0, dy = 0;
 
         // now we search the delta with the source
         if(!masks_get_delta(self, piece, roi_in, form, &dx, &dy))
         {
-          forms = g_list_next(forms);
-          pos++;
           dt_free_align(mask);
-
           continue;
         }
 
@@ -641,8 +655,8 @@ void _process(struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, const
               // we test if the source point is inside roi_in
               if(xx - dx < roi_in->x || xx - dx >= roi_in->x + roi_in->width) continue;
 
-              float f = mask[((int)((yy - fts) / roi_in->scale)) * width
-                             + (int)((xx - fls) / roi_in->scale)] * grpt->opacity;
+              const float f = mask[((int)((yy - fts) / roi_in->scale)) * width
+                                  + (int)((xx - fls) / roi_in->scale)] * grpt->opacity;
 
               for(int c = 0; c < ch; c++)
                 out[ch * ((size_t)roi_out->width * (yy - roi_out->y) + xx - roi_out->x) + c]
@@ -653,8 +667,6 @@ void _process(struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, const
         }
         dt_free_align(mask);
       }
-      pos++;
-      forms = g_list_next(forms);
     }
   }
 }
@@ -705,7 +717,7 @@ void gui_focus(struct dt_iop_module_t *self, gboolean in)
       dt_develop_blend_params_t *bp = self->blend_params;
       dt_masks_form_t *grp = dt_masks_get_from_id(darktable.develop, bp->mask_id);
       //only toggle shape show button if shapes exist
-      if(grp && (grp->type & DT_MASKS_GROUP) && g_list_length(grp->points) > 0)
+      if(grp && (grp->type & DT_MASKS_GROUP) && grp->points)
       {
         if(bd->masks_shown == DT_MASKS_EDIT_OFF) dt_masks_set_edit_mode(self, DT_MASKS_EDIT_FULL);
 
@@ -774,7 +786,7 @@ void gui_update(dt_iop_module_t *self)
   if(darktable.develop->history_updating) bd->masks_shown = DT_MASKS_EDIT_OFF;
 
   //only toggle shape show button if shapes exist
-  if(grp && (grp->type & DT_MASKS_GROUP) && g_list_length(grp->points) > 0)
+  if(grp && (grp->type & DT_MASKS_GROUP) && grp->points)
   {
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g->bt_edit_masks),
                                  (bd->masks_shown != DT_MASKS_EDIT_OFF) && (darktable.develop->gui_module == self));
@@ -798,21 +810,21 @@ void gui_init(dt_iop_module_t *self)
   gtk_widget_set_tooltip_text(hbox, _("click on a shape and drag on canvas.\nuse the mouse wheel "
                                       "to adjust size.\nright click to remove a shape."));
 
-  g->bt_edit_masks = dt_iop_togglebutton_new(self, N_("show and edit shapes"), NULL,
+  g->bt_edit_masks = dt_iop_togglebutton_new(self, NULL, N_("show and edit shapes"), NULL,
                                              G_CALLBACK(_edit_masks), TRUE, 0, 0,
                                              dtgtk_cairo_paint_masks_eye, hbox);
 
-  g->bt_path = dt_iop_togglebutton_new(self, N_("add path"), N_("add multiple paths"),
+  g->bt_path = dt_iop_togglebutton_new(self, N_("shapes"), N_("add path"), N_("add multiple paths"),
                                        G_CALLBACK(_add_shape_callback), TRUE, 0, 0,
                                        dtgtk_cairo_paint_masks_path, hbox);
 
-  g->bt_ellipse = dt_iop_togglebutton_new(self, N_("add ellipse"), N_("add multiple ellipses"),
-                                       G_CALLBACK(_add_shape_callback), TRUE, 0, 0,
-                                       dtgtk_cairo_paint_masks_ellipse, hbox);
+  g->bt_ellipse = dt_iop_togglebutton_new(self, N_("shapes"), N_("add ellipse"), N_("add multiple ellipses"),
+                                          G_CALLBACK(_add_shape_callback), TRUE, 0, 0,
+                                          dtgtk_cairo_paint_masks_ellipse, hbox);
 
-  g->bt_circle = dt_iop_togglebutton_new(self, N_("add circle"), N_("add multiple circles"),
-                                       G_CALLBACK(_add_shape_callback), TRUE, 0, 0,
-                                       dtgtk_cairo_paint_masks_circle, hbox);
+  g->bt_circle = dt_iop_togglebutton_new(self, N_("shapes"), N_("add circle"), N_("add multiple circles"),
+                                         G_CALLBACK(_add_shape_callback), TRUE, 0, 0,
+                                         dtgtk_cairo_paint_masks_circle, hbox);
 
   gtk_box_pack_start(GTK_BOX(hbox), GTK_WIDGET(g->label), FALSE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(self->widget), hbox, TRUE, TRUE, 0);

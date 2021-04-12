@@ -62,7 +62,7 @@
 
 #define LUT_SAMPLES 0x10000
 
-DT_MODULE_INTROSPECTION(6, dt_iop_colorin_params_t)
+DT_MODULE_INTROSPECTION(7, dt_iop_colorin_params_t)
 
 static void update_profile_list(dt_iop_module_t *self);
 
@@ -170,12 +170,29 @@ int output_colorspace(dt_iop_module_t *self, dt_dev_pixelpipe_t *pipe,
   return iop_cs_Lab;
 }
 
+static void _resolve_work_profile(dt_colorspaces_color_profile_type_t *work_type, char *work_filename)
+{
+  for(GList *l = darktable.color_profiles->profiles; l; l = g_list_next(l))
+  {
+    dt_colorspaces_color_profile_t *prof = (dt_colorspaces_color_profile_t *)l->data;
+    if(prof->work_pos > -1 && *work_type == prof->type
+       && (prof->type != DT_COLORSPACE_FILE || dt_colorspaces_is_profile_equal(prof->filename, work_filename)))
+      return;
+  }
+
+  fprintf(stderr,
+          "[colorin] profile `%s' not suitable for work profile. it has been replaced by linear Rec2020 RGB!\n",
+          dt_colorspaces_get_name(*work_type, work_filename));
+  *work_type = DT_COLORSPACE_LIN_REC2020;
+  work_filename[0] = '\0';
+}
+
 int legacy_params(dt_iop_module_t *self, const void *const old_params, const int old_version,
                   void *new_params, const int new_version)
 {
 #define DT_IOP_COLOR_ICC_LEN_V5 100
 
-  if(old_version == 1 && new_version == 6)
+  if(old_version == 1 && new_version == 7)
   {
     typedef struct dt_iop_colorin_params_v1_t
     {
@@ -226,7 +243,7 @@ int legacy_params(dt_iop_module_t *self, const void *const old_params, const int
     new->filename_work[0] = '\0';
     return 0;
   }
-  if(old_version == 2 && new_version == 6)
+  if(old_version == 2 && new_version == 7)
   {
     typedef struct dt_iop_colorin_params_v2_t
     {
@@ -278,7 +295,7 @@ int legacy_params(dt_iop_module_t *self, const void *const old_params, const int
     new->filename_work[0] = '\0';
     return 0;
   }
-  if(old_version == 3 && new_version == 6)
+  if(old_version == 3 && new_version == 7)
   {
     typedef struct dt_iop_colorin_params_v3_t
     {
@@ -332,7 +349,7 @@ int legacy_params(dt_iop_module_t *self, const void *const old_params, const int
 
     return 0;
   }
-  if(old_version == 4 && new_version == 6)
+  if(old_version == 4 && new_version == 7)
   {
     typedef struct dt_iop_colorin_params_v4_t
     {
@@ -357,7 +374,7 @@ int legacy_params(dt_iop_module_t *self, const void *const old_params, const int
 
     return 0;
   }
-  if(old_version == 5 && new_version == 6)
+  if(old_version == 5 && new_version == 7)
   {
     typedef struct dt_iop_colorin_params_v5_t
     {
@@ -382,6 +399,30 @@ int legacy_params(dt_iop_module_t *self, const void *const old_params, const int
     new->blue_mapping = old->blue_mapping;
     new->type_work = old->type_work;
     g_strlcpy(new->filename_work, old->filename_work, sizeof(new->filename_work));
+    _resolve_work_profile(&new->type_work, new->filename_work);
+
+    return 0;
+  }
+  if(old_version == 6 && new_version == 7)
+  {
+    // The structure is equal to to v7 (current) but a new version is introduced to convert invalid
+    // working profile choice to the default, linear Rec2020.
+    typedef struct dt_iop_colorin_params_v6_t
+    {
+      dt_colorspaces_color_profile_type_t type;
+      char filename[DT_IOP_COLOR_ICC_LEN];
+      dt_iop_color_intent_t intent;
+      dt_iop_color_normalize_t normalize;
+      int blue_mapping;
+      // working color profile
+      dt_colorspaces_color_profile_type_t type_work;
+      char filename_work[DT_IOP_COLOR_ICC_LEN];
+    } dt_iop_colorin_params_v6_t;
+
+    const dt_iop_colorin_params_v6_t *old = (dt_iop_colorin_params_v6_t *)old_params;
+    dt_iop_colorin_params_t *new = (dt_iop_colorin_params_t *)new_params;
+    memcpy(new, old, sizeof(*new));
+    _resolve_work_profile(&new->type_work, new->filename_work);
 
     return 0;
   }
@@ -435,7 +476,7 @@ static void profile_changed(GtkWidget *widget, gpointer user_data)
     prof = darktable.color_profiles->profiles;
     pos -= g->n_image_profiles;
   }
-  while(prof)
+  for(; prof; prof = g_list_next(prof))
   {
     dt_colorspaces_color_profile_t *pp = (dt_colorspaces_color_profile_t *)prof->data;
     if(pp->in_pos == pos)
@@ -447,7 +488,6 @@ static void profile_changed(GtkWidget *widget, gpointer user_data)
       DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_CONTROL_PROFILE_USER_CHANGED, DT_COLORSPACES_PROFILE_TYPE_INPUT);
       return;
     }
-    prof = g_list_next(prof);
   }
   // should really never happen.
   fprintf(stderr, "[colorin] color profile %s seems to have disappeared!\n", dt_colorspaces_get_name(p->type, p->filename));
@@ -465,8 +505,7 @@ static void workicc_changed(GtkWidget *widget, gpointer user_data)
   char filename_work[DT_IOP_COLOR_ICC_LEN];
 
   int pos = dt_bauhaus_combobox_get(widget);
-  GList *prof = darktable.color_profiles->profiles;
-  while(prof)
+  for(const GList *prof = darktable.color_profiles->profiles; prof; prof = g_list_next(prof))
   {
     dt_colorspaces_color_profile_t *pp = (dt_colorspaces_color_profile_t *)prof->data;
     if(pp->work_pos == pos)
@@ -475,7 +514,6 @@ static void workicc_changed(GtkWidget *widget, gpointer user_data)
       g_strlcpy(filename_work, pp->filename, sizeof(filename_work));
       break;
     }
-    prof = g_list_next(prof);
   }
 
   if(type_work != DT_COLORSPACE_NONE)
@@ -1772,8 +1810,7 @@ void gui_update(struct dt_iop_module_t *self)
 
   // working profile
   int idx = -1;
-  GList *prof = darktable.color_profiles->profiles;
-  while(prof)
+  for(const GList *prof = darktable.color_profiles->profiles; prof; prof = g_list_next(prof))
   {
     dt_colorspaces_color_profile_t *pp = (dt_colorspaces_color_profile_t *)prof->data;
     if(pp->work_pos > -1
@@ -1783,7 +1820,6 @@ void gui_update(struct dt_iop_module_t *self)
       idx = pp->work_pos;
       break;
     }
-    prof = g_list_next(prof);
   }
 
   if(idx < 0)
@@ -1794,8 +1830,7 @@ void gui_update(struct dt_iop_module_t *self)
   }
   dt_bauhaus_combobox_set(g->work_combobox, idx);
 
-  prof = g->image_profiles;
-  while(prof)
+  for(const GList *prof = g->image_profiles; prof; prof = g_list_next(prof))
   {
     dt_colorspaces_color_profile_t *pp = (dt_colorspaces_color_profile_t *)prof->data;
     if(pp->type == p->type
@@ -1804,11 +1839,9 @@ void gui_update(struct dt_iop_module_t *self)
       dt_bauhaus_combobox_set(g->profile_combobox, pp->in_pos);
       return;
     }
-    prof = g_list_next(prof);
   }
 
-  prof = darktable.color_profiles->profiles;
-  while(prof)
+  for(const GList *prof = darktable.color_profiles->profiles; prof; prof = g_list_next(prof))
   {
     dt_colorspaces_color_profile_t *pp = (dt_colorspaces_color_profile_t *)prof->data;
     if(pp->in_pos > -1
@@ -1818,7 +1851,6 @@ void gui_update(struct dt_iop_module_t *self)
       dt_bauhaus_combobox_set(g->profile_combobox, pp->in_pos + g->n_image_profiles);
       return;
     }
-    prof = g_list_next(prof);
   }
   dt_bauhaus_combobox_set(g->profile_combobox, 0);
 
@@ -2042,7 +2074,6 @@ static void update_profile_list(dt_iop_module_t *self)
   }
 
   g->n_image_profiles = pos + 1;
-  g->image_profiles = g_list_first(g->image_profiles);
 
   // update the gui
   dt_bauhaus_combobox_clear(g->profile_combobox);

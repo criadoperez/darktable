@@ -2112,9 +2112,9 @@ int scrolled(struct dt_iop_module_t *self, double x, double y, int up, uint32_t 
   const float increment = (up) ? +1.0f : -1.0f;
 
   float step;
-  if((state & GDK_SHIFT_MASK) == GDK_SHIFT_MASK)
+  if(dt_modifier_is(state, GDK_SHIFT_MASK))
     step = 1.0f;  // coarse
-  else if((state & GDK_CONTROL_MASK) == GDK_CONTROL_MASK)
+  else if(dt_modifier_is(state, GDK_CONTROL_MASK))
     step = 0.1f;  // fine
   else
     step = 0.25f; // standard
@@ -2987,25 +2987,12 @@ static gboolean notebook_button_press(GtkWidget *widget, GdkEventButton *event, 
 GSList *mouse_actions(struct dt_iop_module_t *self)
 {
   GSList *lm = NULL;
-  dt_mouse_action_t *a = NULL;
-
-  a = (dt_mouse_action_t *)calloc(1, sizeof(dt_mouse_action_t));
-  a->action = DT_MOUSE_ACTION_SCROLL;
-  g_snprintf(a->name, sizeof(a->name), _("[%s over image] change tone exposure"), self->name());
-  lm = g_slist_append(lm, a);
-
-  a = (dt_mouse_action_t *)calloc(1, sizeof(dt_mouse_action_t));
-  a->key.accel_mods = GDK_SHIFT_MASK;
-  a->action = DT_MOUSE_ACTION_SCROLL;
-  g_snprintf(a->name, sizeof(a->name), _("[%s over image] change tone exposure in large steps"), self->name());
-  lm = g_slist_append(lm, a);
-
-  a = (dt_mouse_action_t *)calloc(1, sizeof(dt_mouse_action_t));
-  a->key.accel_mods = GDK_CONTROL_MASK;
-  a->action = DT_MOUSE_ACTION_SCROLL;
-  g_snprintf(a->name, sizeof(a->name), _("[%s over image] change tone exposure in small steps"), self->name());
-  lm = g_slist_append(lm, a);
-
+  lm = dt_mouse_action_create_format(lm, DT_MOUSE_ACTION_SCROLL, 0,
+                                     _("[%s over image] change tone exposure"), self->name());
+  lm = dt_mouse_action_create_format(lm, DT_MOUSE_ACTION_SCROLL, GDK_SHIFT_MASK,
+                                     _("[%s over image] change tone exposure in large steps"), self->name());
+  lm = dt_mouse_action_create_format(lm, DT_MOUSE_ACTION_SCROLL, GDK_CONTROL_MASK,
+                                     _("[%s over image] change tone exposure in small steps"), self->name());
   return lm;
 }
 
@@ -3117,17 +3104,15 @@ void gui_init(struct dt_iop_module_t *self)
   dt_bauhaus_slider_set_step(g->speculars, .05);
   dt_bauhaus_slider_set_format(g->speculars, _("%+.2f EV"));
 
-  ++darktable.bauhaus->skip_accel;
-  dt_bauhaus_widget_set_label(g->noise, NULL, N_("-8 EV"));
-  dt_bauhaus_widget_set_label(g->ultra_deep_blacks, NULL, N_("-7 EV"));
-  dt_bauhaus_widget_set_label(g->deep_blacks, NULL, N_("-6 EV"));
-  dt_bauhaus_widget_set_label(g->blacks, NULL, N_("-5 EV"));
-  dt_bauhaus_widget_set_label(g->shadows, NULL, N_("-4 EV"));
-  dt_bauhaus_widget_set_label(g->midtones, NULL, N_("-3 EV"));
-  dt_bauhaus_widget_set_label(g->highlights, NULL, N_("-2 EV"));
-  dt_bauhaus_widget_set_label(g->whites, NULL, N_("-1 EV"));
-  dt_bauhaus_widget_set_label(g->speculars, NULL, N_("+0 EV"));
-  --darktable.bauhaus->skip_accel;
+  dt_bauhaus_widget_set_label(g->noise, N_("simple"), N_("-8 EV"));
+  dt_bauhaus_widget_set_label(g->ultra_deep_blacks, N_("simple"), N_("-7 EV"));
+  dt_bauhaus_widget_set_label(g->deep_blacks, N_("simple"), N_("-6 EV"));
+  dt_bauhaus_widget_set_label(g->blacks, N_("simple"), N_("-5 EV"));
+  dt_bauhaus_widget_set_label(g->shadows, N_("simple"), N_("-4 EV"));
+  dt_bauhaus_widget_set_label(g->midtones, N_("simple"), N_("-3 EV"));
+  dt_bauhaus_widget_set_label(g->highlights, N_("simple"), N_("-2 EV"));
+  dt_bauhaus_widget_set_label(g->whites, N_("simple"), N_("-1 EV"));
+  dt_bauhaus_widget_set_label(g->speculars, N_("simple"), N_("+0 EV"));
 
   // Advanced view
 
@@ -3279,6 +3264,8 @@ void gui_cleanup(struct dt_iop_module_t *self)
   DT_DEBUG_CONTROL_SIGNAL_DISCONNECT(darktable.signals, G_CALLBACK(_develop_ui_pipe_started_callback), self);
   DT_DEBUG_CONTROL_SIGNAL_DISCONNECT(darktable.signals, G_CALLBACK(_develop_preview_pipe_finished_callback), self);
 
+  if(g->thumb_preview_buf) dt_free_align(g->thumb_preview_buf);
+  if(g->full_preview_buf) dt_free_align(g->full_preview_buf);
   if(g->desc) pango_font_description_free(g->desc);
   if(g->layout) g_object_unref(g->layout);
   if(g->cr) cairo_destroy(g->cr);

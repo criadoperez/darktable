@@ -524,7 +524,7 @@ int mouse_moved(struct dt_iop_module_t *self, double x, double y, double pressur
       //        I guess we have to split the computation.
       if(ratio <= 1.0)
       {
-        if(which == GDK_CONTROL_MASK)
+        if(dt_modifier_is(which, GDK_CONTROL_MASK))
         {
           dt_bauhaus_slider_set(g->scale, new_scale);
         }
@@ -554,7 +554,7 @@ int mouse_moved(struct dt_iop_module_t *self, double x, double y, double pressur
       //        I guess we have to split the computation.
       if(ratio <= 1.0)
       {
-        if(which == GDK_CONTROL_MASK)
+        if(dt_modifier_is(which, GDK_CONTROL_MASK))
         {
           const float new_scale = 100.0 * new_vignette_h / max;
           dt_bauhaus_slider_set(g->scale, new_scale);
@@ -1021,27 +1021,15 @@ void gui_init(struct dt_iop_module_t *self)
 GSList *mouse_actions(struct dt_iop_module_t *self)
 {
   GSList *lm = NULL;
-  dt_mouse_action_t *a = NULL;
-
-  a = (dt_mouse_action_t *)calloc(1, sizeof(dt_mouse_action_t));
-  a->action = DT_MOUSE_ACTION_LEFT_DRAG;
-  g_snprintf(a->name, sizeof(a->name), _("[%s on node] change vignette/feather size"), self->name());
-  lm = g_slist_append(lm, a);
-
-  a = (dt_mouse_action_t *)calloc(1, sizeof(dt_mouse_action_t));
-  a->key.accel_mods = GDK_CONTROL_MASK;
-  a->action = DT_MOUSE_ACTION_LEFT_DRAG;
-  g_snprintf(a->name, sizeof(a->name), _("[%s on node] change vignette/feather size keeping ratio"),
-             self->name());
-  lm = g_slist_append(lm, a);
-
-  a = (dt_mouse_action_t *)calloc(1, sizeof(dt_mouse_action_t));
-  a->action = DT_MOUSE_ACTION_LEFT_DRAG;
-  g_snprintf(a->name, sizeof(a->name), _("[%s on center] move vignette"), self->name());
-  lm = g_slist_append(lm, a);
-
+  lm = dt_mouse_action_create_format(lm, DT_MOUSE_ACTION_LEFT_DRAG, 0, 
+                                     _("[%s on node] change vignette/feather size"), self->name());
+  lm = dt_mouse_action_create_format(lm, DT_MOUSE_ACTION_LEFT_DRAG, GDK_CONTROL_MASK, 
+                                     _("[%s on node] change vignette/feather size keeping ratio"), self->name());
+  lm = dt_mouse_action_create_format(lm, DT_MOUSE_ACTION_LEFT_DRAG, GDK_CONTROL_MASK, 
+                                     _("[%s on center] move vignette"), self->name());
   return lm;
 }
+
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh
 // vim: shiftwidth=2 expandtab tabstop=2 cindent
 // kate: tab-indents: off; indent-width 2; replace-tabs on; indent-mode cstyle; remove-trailing-spaces modified;

@@ -68,14 +68,6 @@ typedef struct dt_camera_import_t
   uint32_t import_count;
 } dt_camera_import_t;
 
-void *dt_camera_previews_job_get_data(const dt_job_t *job)
-{
-  if(!job) return NULL;
-  dt_camera_get_previews_t *params = dt_control_job_get_params(job);
-  if(!params) return NULL;
-  return params->data;
-}
-
 static int32_t dt_camera_capture_job_run(dt_job_t *job)
 {
   dt_camera_capture_t *params = dt_control_job_get_params(job);
@@ -107,9 +99,9 @@ static int32_t dt_camera_capture_job_run(dt_job_t *job)
     do
     {
       // Add value to list
-      values = g_list_append(values, g_strdup(value));
+      values = g_list_prepend(values, g_strdup(value));
       // Check if current values is the same as original value, then lets store item ptr
-      if(strcmp(value, cvalue) == 0) original_value = g_list_last(values)->data;
+      if(strcmp(value, cvalue) == 0) original_value = values->data;
     } while((value = dt_camctl_camera_property_get_next_choice(darktable.camctl, NULL, "shutterspeed"))
             != NULL);
   }
@@ -227,70 +219,20 @@ dt_job_t *dt_camera_capture_job_create(const char *jobcode, uint32_t delay, uint
   return job;
 }
 
-static int32_t dt_camera_get_previews_job_run(dt_job_t *job)
-{
-  dt_camera_get_previews_t *params = dt_control_job_get_params(job);
-
-  dt_camctl_register_listener(darktable.camctl, params->listener);
-  dt_camctl_get_previews(darktable.camctl, params->flags, params->camera);
-  dt_camctl_unregister_listener(darktable.camctl, params->listener);
-
-  return 0;
-}
-
-static dt_camera_get_previews_t *dt_camera_get_previews_alloc()
-{
-  dt_camera_get_previews_t *params = calloc(1, sizeof(dt_camera_get_previews_t));
-  if(!params) return NULL;
-
-  params->listener = g_malloc(sizeof(dt_camctl_listener_t));
-
-  return params;
-}
-
-static void dt_camera_get_previews_cleanup(void *p)
-{
-  dt_camera_get_previews_t *params = p;
-
-  g_free(params->listener);
-
-  free(params);
-}
-
-dt_job_t *dt_camera_get_previews_job_create(dt_camera_t *camera, dt_camctl_listener_t *listener,
-                                            uint32_t flags, void *data)
-{
-  dt_job_t *job = dt_control_job_create(&dt_camera_get_previews_job_run, "get camera previews job");
-  if(!job) return NULL;
-  dt_camera_get_previews_t *params = dt_camera_get_previews_alloc();
-  if(!params)
-  {
-    dt_control_job_dispose(job);
-    return NULL;
-  }
-  dt_control_job_set_params(job, params, dt_camera_get_previews_cleanup);
-
-  memcpy(params->listener, listener, sizeof(dt_camctl_listener_t));
-
-  params->camera = camera;
-  params->flags = flags;
-  params->data = data;
-  return job;
-}
-
 /** Listener interface for import job */
 void _camera_import_image_downloaded(const dt_camera_t *camera, const char *filename, void *data)
 {
   // Import downloaded image to import filmroll
   dt_camera_import_t *t = (dt_camera_import_t *)data;
-  const int32_t imgid = dt_image_import(dt_import_session_film_id(t->shared.session), filename, FALSE);
+  const int32_t imgid = dt_image_import(dt_import_session_film_id(t->shared.session), filename, FALSE, TRUE);
   dt_control_queue_redraw_center();
   gchar *basename = g_path_get_basename(filename);
+  const int num_images = g_list_length(t->images);
   dt_control_log(ngettext("%d/%d imported to %s", "%d/%d imported to %s", t->import_count + 1),
-                 t->import_count + 1, g_list_length(t->images), basename);
+                 t->import_count + 1, num_images, basename);
   g_free(basename);
 
-  t->fraction += 1.0 / g_list_length(t->images);
+  t->fraction += 1.0 / num_images;
 
   dt_control_job_set_progress(t->job, t->fraction);
 
@@ -299,7 +241,7 @@ void _camera_import_image_downloaded(const dt_camera_t *camera, const char *file
     dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_NEW_QUERY, NULL);
   }
 
-  if(t->import_count + 1 == g_list_length(t->images))
+  if(t->import_count + 1 == num_images)
   {
     // only redraw at the end, to not spam the cpu with exposure events
     dt_control_queue_redraw_center();
@@ -398,7 +340,7 @@ static void dt_camera_import_cleanup(void *p)
   free(params);
 }
 
-dt_job_t *dt_camera_import_job_create(const char *jobcode, GList *images, struct dt_camera_t *camera,
+dt_job_t *dt_camera_import_job_create(GList *images, struct dt_camera_t *camera,
                                       time_t time_override)
 {
   dt_job_t *job = dt_control_job_create(&dt_camera_import_job_run, "import selected images from camera");
@@ -414,10 +356,12 @@ dt_job_t *dt_camera_import_job_create(const char *jobcode, GList *images, struct
 
   /* initialize import session for camera import job */
   if(time_override != 0) dt_import_session_set_time(params->shared.session, time_override);
+  char *jobcode = dt_conf_get_string("ui_last/import_jobcode");
   dt_import_session_set_name(params->shared.session, jobcode);
+  g_free(jobcode);
 
   params->fraction = 0;
-  params->images = g_list_copy(images);
+  params->images = images;
   params->camera = camera;
   params->import_count = 0;
   params->job = job;
