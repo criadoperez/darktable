@@ -397,14 +397,14 @@
     <name>ask_before_remove</name>
     <type>bool</type>
     <default>true</default>
-    <shortdescription>ask before removing images from database</shortdescription>
-    <longdescription>always ask the user before any image is removed from DB.</longdescription>
+    <shortdescription>ask before removing images from darktable</shortdescription>
+    <longdescription>always ask the user before any image is removed from darktable</longdescription>
   </dtconfig>
   <dtconfig prefs="security">
     <name>ask_before_delete</name>
     <type>bool</type>
     <default>true</default>
-    <shortdescription>ask before erasing images from disk</shortdescription>
+    <shortdescription>ask before deleting images from disk</shortdescription>
     <longdescription>always ask the user before any image file is deleted</longdescription>
   </dtconfig>
   <dtconfig prefs="security">
@@ -418,7 +418,7 @@
     <name>send_to_trash</name>
     <type>bool</type>
     <default>true</default>
-    <shortdescription>send files to trash when erasing images</shortdescription>
+    <shortdescription>try to use trash when deleting images</shortdescription>
     <longdescription>send files to trash instead of permanently deleting files on system that supports it</longdescription>
   </dtconfig>
   <dtconfig prefs="security">
@@ -651,9 +651,16 @@
     <longdescription/>
   </dtconfig>
   <dtconfig>
+    <name>ui_last/import_dialog_paned_pos</name>
+    <type>int</type>
+    <default>0</default>
+    <shortdescription/>
+    <longdescription/>
+  </dtconfig>
+  <dtconfig>
     <name>ui_last/import_dialog_width</name>
     <type>int</type>
-    <default>600</default>
+    <default>800</default>
     <shortdescription/>
     <longdescription/>
   </dtconfig>
@@ -760,6 +767,20 @@
     <type>string</type>
     <default/>
     <shortdescription>last opened directory.</shortdescription>
+    <longdescription/>
+  </dtconfig>
+  <dtconfig>
+    <name>ui_last/import_last_root</name>
+    <type>string</type>
+    <default/>
+    <shortdescription>last root folder</shortdescription>
+    <longdescription/>
+  </dtconfig>
+  <dtconfig>
+    <name>ui_last/import_last_folder_descending</name>
+    <type>bool</type>
+    <default>FALSE</default>
+    <shortdescription>folders display order in folder pane</shortdescription>
     <longdescription/>
   </dtconfig>
   <dtconfig ui="yes">
@@ -1818,6 +1839,20 @@
     <shortdescription>panels collapsing state in preview mode</shortdescription>
     <longdescription/>
   </dtconfig>
+  <dtconfig>
+    <name>slideshow/ui/panels_collapse_controls</name>
+    <type>bool</type>
+    <default>false</default>
+    <shortdescription>show borders arrows in slideshow</shortdescription>
+    <longdescription/>
+  </dtconfig>
+  <dtconfig>
+    <name>slideshow/ui/panel_collaps_state</name>
+    <type>int</type>
+    <default>1</default>
+    <shortdescription>panels collapsing state in slideshow</shortdescription>
+    <longdescription/>
+  </dtconfig>
   <dtconfig prefs="darkroom" section="modules">
     <name>darkroom/ui/scroll_to_module</name>
     <type>bool</type>
@@ -1963,6 +1998,12 @@
     <type>int</type>
     <default>0</default>
     <shortdescription>last page selected in channel mixer rgb notebook</shortdescription>
+  </dtconfig>
+  <dtconfig>
+    <name>plugins/darkroom/retouch/default_algo</name>
+    <type>int</type>
+    <default>2</default>
+    <shortdescription>default algorithm for the retouch module</shortdescription>
   </dtconfig>
   <dtconfig>
     <name>plugins/darkroom/demosaic/fdc_xover_iso</name>
@@ -2448,11 +2489,75 @@
     <longdescription>height of the histogram module in the darkroom and tethering views</longdescription>
   </dtconfig>
   <dtconfig>
+    <name>plugins/darkroom/atrous/aspect_percent</name>
+    <type min="50" max="100">int</type>
+    <default>56</default>
+    <shortdescription>aspect ratio of contrast equalizer gui in per cent</shortdescription>
+    <longdescription>aspect ratio of contrast equalizer gui in per cent</longdescription>
+  </dtconfig>
+  <dtconfig>
+    <name>plugins/darkroom/denoiseprofile/aspect_percent</name>
+    <type min="50" max="100">int</type>
+    <default>56</default>
+    <shortdescription>aspect ratio of denoise (profiled) wavelets gui in per cent</shortdescription>
+    <longdescription>aspect ratio of denoise (profiled) wavelets gui in per cent</longdescription>
+  </dtconfig>
+  <dtconfig>
+    <name>plugins/darkroom/rawdenoise/aspect_percent</name>
+    <type min="50" max="100">int</type>
+    <default>56</default>
+    <shortdescription>aspect ratio of raw denoise wavelets gui in per cent</shortdescription>
+    <longdescription>aspect ratio of raw denoise wavelets gui in per cent</longdescription>
+  </dtconfig>
+  <dtconfig>
+    <name>plugins/darkroom/colorzones/aspect_percent</name>
+    <type min="50" max="100">int</type>
+    <default>56</default>
+    <shortdescription>aspect ratio of color zones graph in per cent</shortdescription>
+    <longdescription>aspect ratio of color zones graph in per cent</longdescription>
+  </dtconfig>
+  <dtconfig>
+    <name>plugins/darkroom/lowlight/aspect_percent</name>
+    <type min="50" max="100">int</type>
+    <default>56</default>
+    <shortdescription>aspect ratio of lowlight graph in per cent</shortdescription>
+    <longdescription>aspect ratio of lowlight graph in per cent</longdescription>
+  </dtconfig>
+  <dtconfig>
+    <name>plugins/darkroom/levels/aspect_percent</name>
+    <type min="25" max="100">int</type>
+    <default>56</default>
+    <shortdescription>aspect ratio of levels graph in per cent</shortdescription>
+    <longdescription>aspect ratio of levels graph in per cent</longdescription>
+  </dtconfig>
+  <dtconfig>
+    <name>plugins/darkroom/rgblevels/aspect_percent</name>
+    <type min="25" max="100">int</type>
+    <default>56</default>
+    <shortdescription>aspect ratio of rgb levels graph in per cent</shortdescription>
+    <longdescription>aspect ratio of rgb levels graph in per cent</longdescription>
+  </dtconfig>
+  <dtconfig>
+    <name>plugins/darkroom/filmicrgb/aspect_percent</name>
+    <type min="50" max="100">int</type>
+    <default>56</default>
+    <shortdescription>aspect ratio of filmic rgb graph in per cent</shortdescription>
+    <longdescription>aspect ratio of filmic rgb graph in per cent</longdescription>
+  </dtconfig>
+  <dtconfig>
+    <name>plugins/darkroom/colorbalancergb/aspect_percent</name>
+    <type min="50" max="100">int</type>
+    <default>56</default>
+    <shortdescription>aspect ratio of color balance rgb graph in per cent</shortdescription>
+    <longdescription>aspect ratio of color balance rgb graph in per cent</longdescription>
+  </dtconfig>
+  <dtconfig>
     <name>plugins/darkroom/histogram/mode</name>
     <type>
       <enum>
         <option>histogram</option>
         <option>waveform</option>
+        <option>vectorscope</option>
       </enum>
     </type>
     <default>histogram</default>
@@ -2482,6 +2587,25 @@
     <default>overlaid</default>
     <shortdescription/>
     <longdescription/>
+  </dtconfig>
+  <dtconfig>
+    <name>plugins/darkroom/histogram/vectorscope</name>
+    <type>
+      <enum>
+        <option>u*v*</option>
+        <option>AzBz</option>
+      </enum>
+    </type>
+    <default>u*v*</default>
+    <shortdescription/>
+    <longdescription/>
+  </dtconfig>
+  <dtconfig>
+    <name>plugins/darkroom/histogram/vectorscope/angle</name>
+    <type>int</type>
+    <default>270</default>
+    <shortdescription/>
+    <longdescription>Angle in degrees to orient the vectorscope. 0 is the color science proper orientation (see CIE 1976 UCS diagram). 270 is what video editors are used to when using a vectorscope (with red/magenta in 12:00 position).</longdescription>
   </dtconfig>
   <dtconfig>
     <name>plugins/darkroom/histogram/show_red</name>
@@ -2680,7 +2804,7 @@
         <option>none</option>
       </enum>
     </type>
-    <default>display-referred</default>
+    <default>scene-referred</default>
     <shortdescription>auto-apply pixel workflow defaults</shortdescription>
     <longdescription>scene-referred workflow is based on linear modules and will auto-apply filmic and exposure,\ndisplay-referred workflow is based on Lab modules and will auto-apply base curve and the legacy module pipe order.</longdescription>
   </dtconfig>
@@ -2717,6 +2841,13 @@
     <shortdescription>detect monochrome previews</shortdescription>
     <longdescription>many monochrome images can be identified via exif and preview data. beware: this slows down imports and reading exif data</longdescription>
  </dtconfig>
+ <dtconfig prefs="processing">
+    <name>plugins/darkroom/show_warnings</name>
+    <type>bool</type>
+    <default>true</default>
+    <shortdescription>show warning messages</shortdescription>
+    <longdescription>display messages in modules to warn beginner users when non-standard and possibly harmful settings are used in the pipeline.\nthese messages can be false-positive and should be disregarded if you know what you are doing. this option will hide them all the time.</longdescription>
+  </dtconfig>
  <dtconfig>
     <name>screen_dpi_overwrite</name>
     <type>float</type>

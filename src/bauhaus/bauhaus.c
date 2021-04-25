@@ -538,15 +538,16 @@ void dt_bauhaus_load_theme()
   gtk_style_context_lookup_color(ctx, "bauhaus_indicator_border", &darktable.bauhaus->indicator_border);
 
   gtk_style_context_lookup_color(ctx, "graph_bg", &darktable.bauhaus->graph_bg);
+  gtk_style_context_lookup_color(ctx, "graph_exterior", &darktable.bauhaus->graph_exterior);
   gtk_style_context_lookup_color(ctx, "graph_border", &darktable.bauhaus->graph_border);
   gtk_style_context_lookup_color(ctx, "graph_grid", &darktable.bauhaus->graph_grid);
   gtk_style_context_lookup_color(ctx, "graph_fg", &darktable.bauhaus->graph_fg);
   gtk_style_context_lookup_color(ctx, "graph_fg_active", &darktable.bauhaus->graph_fg_active);
   gtk_style_context_lookup_color(ctx, "graph_overlay", &darktable.bauhaus->graph_overlay);
   gtk_style_context_lookup_color(ctx, "inset_histogram", &darktable.bauhaus->inset_histogram);
-  gtk_style_context_lookup_color(ctx, "graph_red", &darktable.bauhaus->graph_primaries[0]);
-  gtk_style_context_lookup_color(ctx, "graph_green", &darktable.bauhaus->graph_primaries[1]);
-  gtk_style_context_lookup_color(ctx, "graph_blue", &darktable.bauhaus->graph_primaries[2]);
+  gtk_style_context_lookup_color(ctx, "graph_red", &darktable.bauhaus->graph_colors[0]);
+  gtk_style_context_lookup_color(ctx, "graph_green", &darktable.bauhaus->graph_colors[1]);
+  gtk_style_context_lookup_color(ctx, "graph_blue", &darktable.bauhaus->graph_colors[2]);
   gtk_style_context_lookup_color(ctx, "colorlabel_red",
                                  &darktable.bauhaus->colorlabels[DT_COLORLABELS_RED]);
   gtk_style_context_lookup_color(ctx, "colorlabel_yellow",
@@ -2162,6 +2163,8 @@ void dt_bauhaus_show_popup(dt_bauhaus_widget_t *w)
 
 static gboolean dt_bauhaus_slider_add_delta_internal(GtkWidget *widget, float delta, guint state)
 {
+  if (delta == 0) return TRUE;
+
   dt_bauhaus_widget_t *w = (dt_bauhaus_widget_t *)widget;
   const dt_bauhaus_slider_data_t *d = &w->data.slider;
 
@@ -2202,15 +2205,16 @@ static gboolean dt_bauhaus_slider_scroll(GtkWidget *widget, GdkEventScroll *even
 
   gtk_widget_grab_focus(widget);
 
-  gdouble delta_y = 0.0;;
-  if(dt_gui_get_scroll_delta(event, &delta_y))
+  int delta_y;
+  if(dt_gui_get_scroll_unit_delta(event, &delta_y))
   {
-    delta_y *= -w->data.slider.scale / 5.0;
+    if(delta_y == 0) return TRUE;
+    gdouble delta = delta_y * -w->data.slider.scale / 5.0;
     gtk_widget_set_state_flags(GTK_WIDGET(w), GTK_STATE_FLAG_FOCUSED, TRUE);
-    return dt_bauhaus_slider_add_delta_internal(widget, delta_y, event->state);
+    return dt_bauhaus_slider_add_delta_internal(widget, delta, event->state);
   }
 
-  return FALSE;
+  return TRUE; // Ensure that scrolling the slider cannot move side panel
 }
 
 static gboolean dt_bauhaus_slider_key_press(GtkWidget *widget, GdkEventKey *event, gpointer user_data)
@@ -2264,7 +2268,7 @@ static gboolean dt_bauhaus_combobox_scroll(GtkWidget *widget, GdkEventScroll *ev
       dt_bauhaus_combobox_set(widget, new_pos);
     return TRUE;
   }
-  return FALSE;
+  return TRUE; // Ensure that scrolling the combobox cannot move side panel
 }
 
 static gboolean dt_bauhaus_combobox_key_press(GtkWidget *widget, GdkEventKey *event, gpointer user_data)

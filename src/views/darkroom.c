@@ -474,7 +474,7 @@ void expose(
     image_surface_imgid = dev->image_storage.id;
   }
   else if(dev->preview_pipe->output_imgid != dev->image_storage.id)
-  { 
+  {
     gchar *load_txt;
     float fontsize;
 
@@ -649,7 +649,7 @@ void expose(
   // display mask if we have a current module activated or if the masks manager module is expanded
 
   const gboolean display_masks = (dev->gui_module && dev->gui_module->enabled
-                                  && dt_dev_modulegroups_get(darktable.develop) != DT_MODULEGROUP_BASICS)
+                                  && dt_dev_modulegroups_get_activated(darktable.develop) != DT_MODULEGROUP_BASICS)
                                  || dt_lib_gui_get_expanded(dt_lib_get_module("masks"));
 
   // execute module callback hook.
@@ -731,7 +731,7 @@ void expose(
       dt_masks_events_post_expose(dev->gui_module, cri, width, height, pointerx, pointery);
     // module
     if(dev->gui_module && dev->gui_module->gui_post_expose
-       && dt_dev_modulegroups_get(darktable.develop) != DT_MODULEGROUP_BASICS)
+       && dt_dev_modulegroups_get_activated(darktable.develop) != DT_MODULEGROUP_BASICS)
       dev->gui_module->gui_post_expose(dev->gui_module, cri, width, height, pointerx, pointery);
   }
 
@@ -3286,7 +3286,7 @@ void mouse_moved(dt_view_t *self, double x, double y, double pressure, int which
   if(handled) return;
   // module
   if(dev->gui_module && dev->gui_module->mouse_moved
-     && dt_dev_modulegroups_get(darktable.develop) != DT_MODULEGROUP_BASICS)
+     && dt_dev_modulegroups_get_activated(darktable.develop) != DT_MODULEGROUP_BASICS)
     handled = dev->gui_module->mouse_moved(dev->gui_module, x, y, pressure, which);
   if(handled) return;
 
@@ -3338,7 +3338,7 @@ int button_released(dt_view_t *self, double x, double y, int which, uint32_t sta
   if(handled) return handled;
   // module
   if(dev->gui_module && dev->gui_module->button_released
-     && dt_dev_modulegroups_get(darktable.develop) != DT_MODULEGROUP_BASICS)
+     && dt_dev_modulegroups_get_activated(darktable.develop) != DT_MODULEGROUP_BASICS)
     handled = dev->gui_module->button_released(dev->gui_module, x, y, which, state);
   if(handled) return handled;
   if(which == 1) dt_control_change_cursor(GDK_LEFT_PTR);
@@ -3435,7 +3435,7 @@ int button_pressed(dt_view_t *self, double x, double y, double pressure, int whi
   if(handled) return handled;
   // module
   if(dev->gui_module && dev->gui_module->button_pressed
-     && dt_dev_modulegroups_get(darktable.develop) != DT_MODULEGROUP_BASICS)
+     && dt_dev_modulegroups_get_activated(darktable.develop) != DT_MODULEGROUP_BASICS)
     handled = dev->gui_module->button_pressed(dev->gui_module, x, y, pressure, which, type, state);
   if(handled) return handled;
 
@@ -3554,7 +3554,7 @@ void scrolled(dt_view_t *self, double x, double y, int up, int state)
   if(handled) return;
   // module
   if(dev->gui_module && dev->gui_module->scrolled
-     && dt_dev_modulegroups_get(darktable.develop) != DT_MODULEGROUP_BASICS)
+     && dt_dev_modulegroups_get_activated(darktable.develop) != DT_MODULEGROUP_BASICS)
     handled = dev->gui_module->scrolled(dev->gui_module, x, y, up, state);
   if(handled) return;
   // free zoom
@@ -4477,77 +4477,10 @@ static gboolean _second_window_draw_callback(GtkWidget *widget, cairo_t *crf, dt
   return TRUE;
 }
 
-static gboolean dt_gui_get_second_window_scroll_unit_deltas(const GdkEventScroll *event, int *delta_x, int *delta_y)
-{
-  // accumulates scrolling regardless of source or the widget being scrolled
-  static gdouble acc_x = 0.0, acc_y = 0.0;
-  gboolean handled = FALSE;
-
-  switch(event->direction)
-  {
-    // is one-unit cardinal, e.g. from a mouse scroll wheel
-    case GDK_SCROLL_LEFT:
-      if(delta_x) *delta_x = -1;
-      if(delta_y) *delta_y = 0;
-      handled = TRUE;
-      break;
-    case GDK_SCROLL_RIGHT:
-      if(delta_x) *delta_x = 1;
-      if(delta_y) *delta_y = 0;
-      handled = TRUE;
-      break;
-    case GDK_SCROLL_UP:
-      if(delta_x) *delta_x = 0;
-      if(delta_y) *delta_y = -1;
-      handled = TRUE;
-      break;
-    case GDK_SCROLL_DOWN:
-      if(delta_x) *delta_x = 0;
-      if(delta_y) *delta_y = 1;
-      handled = TRUE;
-      break;
-    // is trackpad (or touch) scroll
-    case GDK_SCROLL_SMOOTH:
-#if GTK_CHECK_VERSION(3, 20, 0)
-      // stop events reset accumulated delta
-      if(event->is_stop)
-      {
-        acc_x = acc_y = 0.0;
-        break;
-      }
-#endif
-      // accumulate trackpad/touch scrolls until they make a unit
-      // scroll, and only then tell caller that there is a scroll to
-      // handle
-      acc_x += event->delta_x;
-      acc_y += event->delta_y;
-      if(fabs(acc_x) >= 1.0)
-      {
-        gdouble amt = trunc(acc_x);
-        acc_x -= amt;
-        if(delta_x) *delta_x = (int)amt;
-        if(delta_y) *delta_y = 0;
-        handled = TRUE;
-      }
-      if(fabs(acc_y) >= 1.0)
-      {
-        gdouble amt = trunc(acc_y);
-        acc_y -= amt;
-        if(delta_x && !handled) *delta_x = 0;
-        if(delta_y) *delta_y = (int)amt;
-        handled = TRUE;
-      }
-      break;
-    default:
-      break;
-  }
-  return handled;
-}
-
 static gboolean _second_window_scrolled_callback(GtkWidget *widget, GdkEventScroll *event, dt_develop_t *dev)
 {
   int delta_y;
-  if(dt_gui_get_second_window_scroll_unit_deltas(event, NULL, &delta_y))
+  if(dt_gui_get_scroll_unit_deltas(event, NULL, &delta_y))
   {
     second_window_scrolled(widget, dev, event->x, event->y, delta_y < 0, event->state & 0xf);
     gtk_widget_queue_draw(widget);

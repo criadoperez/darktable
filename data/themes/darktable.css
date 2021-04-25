@@ -84,7 +84,7 @@
 /* Modules box (plugins) */
 @define-color plugin_bg_color @grey_20;
 @define-color plugin_fg_color @fg_color;
-@define-color section_label @grey_60;
+@define-color section_label shade(@plugin_fg_color, 0.9);
 @define-color plugin_label_color @grey_65;
 
 /* Modules controls (sliders and comboboxes) */
@@ -150,7 +150,8 @@
 @define-color brush_trace alpha(black, .8);
 
 /* Graphs : histogram, navigation thumbnail and some items on tone curve */
-@define-color graph_bg @grey_10;
+@define-color graph_bg @grey_15;
+@define-color graph_exterior shade(@graph_bg, 0.9);
 @define-color graph_border @grey_05;
 @define-color graph_fg @grey_75;
 @define-color graph_fg_active @grey_95;
