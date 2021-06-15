@@ -1,6 +1,6 @@
 /*
     This file is part of darktable,
-    Copyright (C) 2011-2020 darktable developers.
+    Copyright (C) 2011-2021 darktable developers.
 
     darktable is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -2537,30 +2537,33 @@ void dt_database_show_error(const dt_database_t *db)
 
     if(delete_lockfiles)
     {
-      gboolean really_delete_lockfiles = dt_gui_show_standalone_yes_no_dialog(_("are you sure?"),
-                                        _("\n  do you really want to delete the lock files?  \n"), _("no"), _("yes"));
+      gboolean really_delete_lockfiles =
+        dt_gui_show_standalone_yes_no_dialog
+        (_("are you sure?"),
+         _("\ndo you really want to delete the lock files?\n"), _("no"), _("yes"));
       if(really_delete_lockfiles)
       {
         int status = 0;
 
         char *lck_filename = g_strconcat(lck_dirname, "/data.db.lock", NULL);
-        if(access(lck_filename, F_OK) != -1)
+        if(g_access(lck_filename, F_OK) != -1)
           status += remove(lck_filename);
 
         lck_filename = g_strconcat(lck_dirname, "/library.db.lock", NULL);
-        if(access(lck_filename, F_OK) != -1)
+        if(g_access(lck_filename, F_OK) != -1)
           status += remove(lck_filename);
 
         if(status==0)
           dt_gui_show_standalone_yes_no_dialog(_("done"),
-                                        _("\n  successfully deleted the lock files.  \n  you can now restart darktable  \n"),
+                                        _("\nsuccessfully deleted the lock files.\nyou can now restart darktable\n"),
                                         _("ok"), NULL);
         else
-          dt_gui_show_standalone_yes_no_dialog(_("error"), g_markup_printf_escaped(
-                                        _("\n  at least one file could not be removed.  \n"
-                                        "  you may try to manually delete the files <i>data.db.lock</i> and <i>library.db.lock</i>  \n"
-                                        "  in folder <a href=\"file:///%s\">%s</a>.  \n"), lck_dirname, lck_dirname),
-                                        _("ok"), NULL);
+          dt_gui_show_standalone_yes_no_dialog
+            (_("error"), g_markup_printf_escaped(
+              _("\nat least one file could not be removed.\n"
+                "you may try to manually delete the files <i>data.db.lock</i> and <i>library.db.lock</i>\n"
+                "in folder <a href=\"file:///%s\">%s</a>.\n"), lck_dirname, lck_dirname),
+             _("ok"), NULL);
       }
     }
 
@@ -2728,7 +2731,7 @@ void ask_for_upgrade(const gchar *dbname, const gboolean has_gui)
   char *label_text = g_markup_printf_escaped(_("the database schema has to be upgraded for\n"
                                                "\n"
                                                "<span style='italic'>%s</span>\n"
-                                               "\n"
+                                               "\nthis might take a long time in case of a large database\n\n"
                                                "do you want to proceed or quit now to do a backup\n"),
                                                dbname);
 
@@ -3471,14 +3474,14 @@ static void _database_delete_mipmaps_files()
 
   snprintf(mipmapfilename, sizeof(mipmapfilename), "%s/mipmaps", cachedir);
 
-  if(access(mipmapfilename, F_OK) != -1)
+  if(g_access(mipmapfilename, F_OK) != -1)
   {
     fprintf(stderr, "[mipmap_cache] dropping old version file: %s\n", mipmapfilename);
     g_unlink(mipmapfilename);
 
     snprintf(mipmapfilename, sizeof(mipmapfilename), "%s/mipmaps.fallback", cachedir);
 
-    if(access(mipmapfilename, F_OK) != -1) g_unlink(mipmapfilename);
+    if(g_access(mipmapfilename, F_OK) != -1) g_unlink(mipmapfilename);
   }
 }
 

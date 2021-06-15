@@ -1,6 +1,6 @@
 /*
     This file is part of darktable,
-    Copyright (C) 2013-2020 darktable developers.
+    Copyright (C) 2013-2021 darktable developers.
 
     darktable is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@
 #include "develop/blend.h"
 #include "develop/imageop.h"
 #include "develop/masks.h"
+#include "develop/openmp_maths.h"
 #include <assert.h>
 
 static void _path_bounding_box_raw(const float *const points, const float *border, const int nb_corner, const int num_points, int num_borders,
@@ -54,7 +55,7 @@ static void _path_border_get_XY(float p0x, float p0y, float p1x, float p1y, floa
   const float a = 3.0f * ti * ti;
   const float b = 3.0f * (ti * ti - 2.0f * t * ti);
   const float c = 3.0f * (2.0f * t * ti - t * t);
-  const float d = 3.0f * t * t;
+  const float d = 3.0f * sqf(t);
 
   const float dx = -p0x * a + p1x * b + p2x * c + p3x * d;
   const float dy = -p0y * a + p1y * b + p2y * c + p3y * d;
@@ -66,7 +67,7 @@ static void _path_border_get_XY(float p0x, float p0y, float p1x, float p1y, floa
     *yb = NAN;
     return;
   }
-  const float l = 1.0f / sqrtf(dx * dx + dy * dy);
+  const float l = 1.0f / sqrtf(sqf(dx) + sqf(dy));
   *xb = (*xc) + rad * dy * l;
   *yb = (*yc) - rad * dx * l;
 }
@@ -846,13 +847,13 @@ static void _path_get_distance(float x, float y, float as, dt_masks_form_gui_t *
       y_min = fminf(y_min, yy);
       y_max = fmaxf(y_max, yy);
 
-      const float dd = (xx - x) * (xx - x) + (yy - y) * (yy - y);
+      const float dd = sqf(xx - x) + sqf(yy - y);
       *dist = fminf(*dist, dd);
     }
 
     const float cx = x - (x_min + (x_max - x_min) / 2.0f);
     const float cy = y - (y_min + (y_max - y_min) / 2.0f);
-    const float dd = (cx * cx) + (cy * cy);
+    const float dd = sqf(cx) + sqf(cy);
     *dist = fminf(*dist, dd);
 
     return;
@@ -901,7 +902,7 @@ static void _path_get_distance(float x, float y, float as, dt_masks_form_gui_t *
       y_min = fminf(y_min, yy);
       y_max = fmaxf(y_max, yy);
 
-      const float dd = (xx - x) * (xx - x) + (yy - y) * (yy - y);
+      const float dd = sqf(xx - x) + sqf(yy - y);
       *dist = fminf(*dist, dd);
 
       if(dd < as2)
@@ -921,7 +922,7 @@ static void _path_get_distance(float x, float y, float as, dt_masks_form_gui_t *
 
     const float cx = x - (x_min + (x_max - x_min) / 2.0f);
     const float cy = y - (y_min + (y_max - y_min) / 2.0f);
-    const float dd = (cx * cx) + (cy * cy);
+    const float dd = sqf(cx) + sqf(cy);
     *dist = fminf(*dist, dd);
   }
   else *inside_border = 1;
@@ -1304,8 +1305,8 @@ static int _path_events_button_pressed(struct dt_iop_module_t *module, float pzx
       if(!gpt) return 0;
       // we start the form dragging
       gui->source_dragging = TRUE;
-      gui->dx = gpt->source[2] - gui->posx;
-      gui->dy = gpt->source[3] - gui->posy;
+      gui->dx = gpt->source[0] - gui->posx;
+      gui->dy = gpt->source[1] - gui->posy;
       return 1;
     }
     else if(gui->form_selected && gui->edit_mode == DT_MASKS_EDIT_FULL)
@@ -3106,7 +3107,7 @@ static void _path_set_hint_message(const dt_masks_form_gui_t *const gui, const d
                         "<b>cancel</b>: right-click"), msgbuf_len);
   else if(gui->creation)
     g_strlcat(msgbuf, _("<b>add node</b>: click, <b>add sharp node</b>:ctrl+click\n"
-                        "<b>finnish path</b>: right-click"), msgbuf_len);
+                        "<b>finish path</b>: right-click"), msgbuf_len);
   else if(gui->point_selected >= 0)
     g_strlcat(msgbuf, _("<b>move node</b>: drag, <b>remove node</b>: right-click\n"
                         "<b>switch smooth/sharp mode</b>: ctrl+click"), msgbuf_len);

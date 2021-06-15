@@ -1,6 +1,6 @@
 /*
     This file is part of darktable,
-    Copyright (C) 2010-2020 darktable developers.
+    Copyright (C) 2010-2021 darktable developers.
 
     darktable is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -50,6 +50,15 @@
 #ifdef _WIN32
 #include "win/dtwin.h"
 #endif
+
+// Control of the collection updates during an import.  Start with a short interval to feel responsive,
+// but use fairly infrequent updates for large imports to minimize overall time.
+#define INIT_UPDATE_INTERVAL	0.5 //seconds
+#define MAX_UPDATE_INTERVAL     3.0 //seconds
+// How long (in seconds) between updates of the "importing N/M" progress indicator?  Should be relatively
+// short to avoid the impression that the import has gotten stuck.  Setting this too low will impact the
+// overall time for a large import.
+#define PROGRESS_UPDATE_INTERVAL 0.5
 
 typedef struct dt_control_datetime_t
 {
@@ -149,7 +158,8 @@ static int32_t _generic_dt_control_fileop_images_job_run(dt_job_t *job,
   }
   dt_film_remove_empty();
   DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_FILMROLLS_CHANGED);
-  dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, g_list_copy(params->index));
+  dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, DT_COLLECTION_PROP_UNDEF,
+                             g_list_copy(params->index));
   dt_control_queue_redraw_center();
   return 0;
 }
@@ -537,7 +547,8 @@ static int32_t dt_control_merge_hdr_job_run(dt_job_t *job)
   g_free(directory);
 
   // refresh the thumbtable view
-  dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, g_list_prepend(NULL, GINT_TO_POINTER(imageid)));
+  dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, DT_COLLECTION_PROP_UNDEF,
+                             g_list_prepend(NULL, GINT_TO_POINTER(imageid)));
   DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_FILMROLLS_CHANGED);
   dt_control_queue_redraw_center();
 
@@ -570,7 +581,7 @@ static int32_t dt_control_duplicate_images_job_run(dt_job_t *job)
       // a duplicate should keep the change time stamp of the original
       dt_image_cache_set_change_timestamp_from_image(darktable.image_cache, newimgid, imgid);
 
-      dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, NULL);
+      dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, DT_COLLECTION_PROP_UNDEF, NULL);
     }
     t = g_list_next(t);
     fraction += 1.0 / total;
@@ -609,7 +620,8 @@ static int32_t dt_control_flip_images_job_run(dt_job_t *job)
 
   dt_undo_end_group(darktable.undo);
 
-  dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, g_list_copy(params->index));
+  dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, DT_COLLECTION_PROP_ASPECT_RATIO,
+                             g_list_copy(params->index));
   dt_control_queue_redraw_center();
   return 0;
 }
@@ -648,7 +660,8 @@ static int32_t dt_control_monochrome_images_job_run(dt_job_t *job)
 
   dt_undo_end_group(darktable.undo);
 
-  dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, g_list_copy(params->index));
+  dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, DT_COLLECTION_PROP_UNDEF,
+                             g_list_copy(params->index));
   dt_control_queue_redraw_center();
   return 0;
 }
@@ -765,7 +778,8 @@ static int32_t dt_control_remove_images_job_run(dt_job_t *job)
     list = g_list_delete_link(list, list);
   }
   dt_film_remove_empty();
-  dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, g_list_copy(params->index));
+  dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, DT_COLLECTION_PROP_UNDEF,
+                             g_list_copy(params->index));
   DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_FILMROLLS_CHANGED);
   dt_control_queue_redraw_center();
 
@@ -826,7 +840,7 @@ static gboolean _dt_delete_dialog_main_thread(gpointer user_data)
     gtk_dialog_add_button(GTK_DIALOG(dialog), _("physically delete"), _DT_DELETE_DIALOG_CHOICE_DELETE);
     gtk_dialog_add_button(GTK_DIALOG(dialog), _("physically delete all files"), _DT_DELETE_DIALOG_CHOICE_DELETE_ALL);
   }
-  gtk_dialog_add_button(GTK_DIALOG(dialog), _("only remove from the collection"), _DT_DELETE_DIALOG_CHOICE_REMOVE);
+  gtk_dialog_add_button(GTK_DIALOG(dialog), _("only remove from the image library"), _DT_DELETE_DIALOG_CHOICE_REMOVE);
   gtk_dialog_add_button(GTK_DIALOG(dialog), _("skip to next file"), _DT_DELETE_DIALOG_CHOICE_CONTINUE);
   gtk_dialog_add_button(GTK_DIALOG(dialog), _("stop process"), _DT_DELETE_DIALOG_CHOICE_STOP);
 
@@ -1081,7 +1095,8 @@ delete_next_file:
   }
   g_list_free(list);
   dt_film_remove_empty();
-  dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, g_list_copy(params->index));
+  dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, DT_COLLECTION_PROP_UNDEF,
+                             g_list_copy(params->index));
   DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_FILMROLLS_CHANGED);
   dt_control_queue_redraw_center();
   return 0;
@@ -1245,7 +1260,8 @@ static int32_t dt_control_local_copy_images_job_run(dt_job_t *job)
     dt_control_job_set_progress(job, fraction);
   }
 
-  dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, g_list_copy(params->index));
+  dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, DT_COLLECTION_PROP_LOCAL_COPY,
+                             g_list_copy(params->index));
   if(tag_change) DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_TAG_CHANGED);
   DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_FILMROLLS_CHANGED);
   dt_control_queue_redraw_center();
@@ -1291,7 +1307,8 @@ static int32_t dt_control_refresh_exif_run(dt_job_t *job)
     fraction += 1.0 / total;
     dt_control_job_set_progress(job, fraction);
   }
-  dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, g_list_copy(params->index));
+  dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, DT_COLLECTION_PROP_UNDEF,
+                             g_list_copy(params->index));
   DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_TAG_CHANGED);
   dt_control_queue_redraw_center();
   return 0;
@@ -2098,17 +2115,36 @@ static int _control_import_image_copy(const char *filename,
       *imgs = g_list_prepend(*imgs, GINT_TO_POINTER(imgid));
       if((imgid & 3) == 3)
       {
-        dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_NEW_QUERY, NULL);
+        dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, DT_COLLECTION_PROP_UNDEF,
+                                   NULL);
         dt_control_queue_redraw_center();
       }
     }
   }
+  g_free(data);
   g_free(output);
   g_free(basename);
   return res ? dt_import_session_film_id(session) : -1;
 }
 
-static int _control_import_image_insitu(const char *filename, GList **imgs)
+static void _collection_update(double *last_update, double *update_interval)
+{
+  double currtime = dt_get_wtime();
+  if (currtime - *last_update > *update_interval)
+  {
+    *last_update = currtime;
+    // We want frequent updates at the beginning to make the import feel responsive, but large imports
+    // should use infrequent updates to get the fastest import.  So we gradually increase the interval
+    // between updates until it hits the pre-set maximum
+    if (*update_interval < MAX_UPDATE_INTERVAL)
+      *update_interval += 0.1;
+    dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, DT_COLLECTION_PROP_UNDEF, NULL);
+    dt_control_queue_redraw_center();
+  }
+}
+
+static int _control_import_image_insitu(const char *filename, GList **imgs, double *last_update,
+                                        double *update_interval)
 {
   char *dirname = g_path_get_dirname(filename);
   dt_film_t film;
@@ -2118,11 +2154,7 @@ static int _control_import_image_insitu(const char *filename, GList **imgs)
   else
   {
     *imgs = g_list_prepend(*imgs, GINT_TO_POINTER(imgid));
-    if((imgid & 3) == 3)
-    {
-      dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_NEW_QUERY, NULL);
-      dt_control_queue_redraw_center();
-    }
+    _collection_update(last_update, update_interval);
   }
   g_free(dirname);
   return filmid;
@@ -2207,6 +2239,9 @@ static int32_t _control_import_job_run(dt_job_t *job)
   double fraction = 0.0f;
   int filmid = -1;
   int first_filmid = -1;
+  double last_coll_update = dt_get_wtime() - (INIT_UPDATE_INTERVAL/2.0);
+  double last_prog_update = last_coll_update;
+  double update_interval = INIT_UPDATE_INTERVAL;
   for(GList *img = t; img; img = g_list_next(img))
   {
     if(data->session)
@@ -2219,18 +2254,23 @@ static int32_t _control_import_job_run(dt_job_t *job)
         dt_conf_set_int("plugins/lighttable/collect/num_rules", 1);
         dt_conf_set_int("plugins/lighttable/collect/item0", 0);
         dt_conf_set_string("plugins/lighttable/collect/string0", output_path);
-        dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_NEW_QUERY, NULL);
+        _collection_update(&last_coll_update, &update_interval);
       }
     }
     else
-      filmid = _control_import_image_insitu((char *)img->data, &imgs);
+      filmid = _control_import_image_insitu((char *)img->data, &imgs, &last_coll_update, &update_interval);
     if(filmid != -1)
       cntr++;
     fraction += 1.0 / total;
-    snprintf(message, sizeof(message), ngettext("importing %d/%d image", "importing %d/%d images", cntr), cntr, total);
-    dt_control_job_set_progress_message(job, message);
-    dt_control_job_set_progress(job, fraction);
-    g_usleep(100);
+    double currtime  = dt_get_wtime();
+    if (currtime - last_prog_update > PROGRESS_UPDATE_INTERVAL)
+    {
+      last_prog_update = currtime;
+      snprintf(message, sizeof(message), ngettext("importing %d/%d image", "importing %d/%d images", cntr), cntr, total);
+      dt_control_job_set_progress_message(job, message);
+      dt_control_job_set_progress(job, fraction);
+      g_usleep(100);
+    }
   }
 
   dt_control_log(ngettext("imported %d image", "imported %d images", cntr), cntr);

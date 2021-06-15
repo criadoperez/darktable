@@ -1,6 +1,6 @@
 /*
    This file is part of darktable,
-   Copyright (C) 2014-2020 darktable developers.
+   Copyright (C) 2014-2021 darktable developers.
 
    darktable is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -510,6 +510,7 @@ int dt_lua_init_luastorages(lua_State *L)
   lua_pushstring(L, "destroy_storage");
   lua_pushcfunction(L, &destroy_storage);
   lua_settable(L, -3);
+  lua_pop(L, 1);
 
   dt_lua_push_darktable_lib(L);
   lua_pushstring(L, "register_storage");

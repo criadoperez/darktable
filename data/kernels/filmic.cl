@@ -16,7 +16,9 @@
     along with darktable.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "basic.cl"
+#include "common.h"
+#include "colorspace.h"
+#include "color_conversion.h"
 #include "noise_generator.h"
 
 #define INVERSE_SQRT_3 0.5773502691896258f
@@ -163,7 +165,7 @@ inline float pixel_rgb_norm_euclidean(const float4 pixel)
 }
 
 inline float get_pixel_norm(const float4 pixel, const dt_iop_filmicrgb_methods_type_t variant,
-                            constant dt_colorspaces_iccprofile_info_cl_t *const profile_info,
+                            constant const dt_colorspaces_iccprofile_info_cl_t *const profile_info,
                             read_only image2d_t lut, const int use_work_profile)
 {
   switch(variant)
@@ -307,7 +309,7 @@ inline float log_tonemapping_v2(const float x,
 
 inline float4 filmic_split_v1(const float4 i,
                               const float dynamic_range, const float black_exposure, const float grey_value,
-                              constant dt_colorspaces_iccprofile_info_cl_t *profile_info,
+                              constant const dt_colorspaces_iccprofile_info_cl_t *const profile_info,
                               read_only image2d_t lut, const int use_work_profile,
                               const float sigma_toe, const float sigma_shoulder, const float saturation,
                               const float4 M1, const float4 M2, const float4 M3, const float4 M4, const float4 M5,
@@ -344,7 +346,7 @@ inline float4 filmic_split_v1(const float4 i,
 
 inline float4 filmic_split_v2_v3(const float4 i,
                                  const float dynamic_range, const float black_exposure, const float grey_value,
-                                 constant dt_colorspaces_iccprofile_info_cl_t *profile_info,
+                                 constant const dt_colorspaces_iccprofile_info_cl_t *const profile_info,
                                  read_only image2d_t lut, const int use_work_profile,
                                  const float sigma_toe, const float sigma_shoulder, const float saturation,
                                  const float4 M1, const float4 M2, const float4 M3, const float4 M4, const float4 M5,
@@ -383,7 +385,7 @@ kernel void
 filmicrgb_split (read_only image2d_t in, write_only image2d_t out,
                  const int width, const int height,
                  const float dynamic_range, const float black_exposure, const float grey_value,
-                 constant dt_colorspaces_iccprofile_info_cl_t *profile_info,
+                 constant const dt_colorspaces_iccprofile_info_cl_t *const profile_info,
                  read_only image2d_t lut, const int use_work_profile,
                  const float sigma_toe, const float sigma_shoulder, const float saturation,
                  const float4 M1, const float4 M2, const float4 M3, const float4 M4, const float4 M5,
@@ -430,7 +432,7 @@ filmicrgb_split (read_only image2d_t in, write_only image2d_t out,
 
 inline float4 filmic_chroma_v1(const float4 i,
                                const float dynamic_range, const float black_exposure, const float grey_value,
-                               constant dt_colorspaces_iccprofile_info_cl_t *profile_info,
+                               constant const dt_colorspaces_iccprofile_info_cl_t *const profile_info,
                                read_only image2d_t lut, const int use_work_profile,
                                const float sigma_toe, const float sigma_shoulder, const float saturation,
                                const float4 M1, const float4 M2, const float4 M3, const float4 M4, const float4 M5,
@@ -471,7 +473,7 @@ inline float4 filmic_chroma_v1(const float4 i,
 
 inline float4 filmic_chroma_v2_v3(const float4 i,
                                   const float dynamic_range, const float black_exposure, const float grey_value,
-                                  constant dt_colorspaces_iccprofile_info_cl_t *profile_info,
+                                  constant const dt_colorspaces_iccprofile_info_cl_t *const profile_info,
                                   read_only image2d_t lut, const int use_work_profile,
                                   const float sigma_toe, const float sigma_shoulder, const float saturation,
                                   const float4 M1, const float4 M2, const float4 M3, const float4 M4, const float4 M5,
@@ -525,7 +527,7 @@ kernel void
 filmicrgb_chroma (read_only image2d_t in, write_only image2d_t out,
                  const int width, const int height,
                  const float dynamic_range, const float black_exposure, const float grey_value,
-                 constant dt_colorspaces_iccprofile_info_cl_t *profile_info,
+                 constant const dt_colorspaces_iccprofile_info_cl_t *const profile_info,
                  read_only image2d_t lut, const int use_work_profile,
                  const float sigma_toe, const float sigma_shoulder, const float saturation,
                  const float4 M1, const float4 M2, const float4 M3, const float4 M4, const float4 M5,
@@ -629,7 +631,7 @@ filmic_inpaint_noise(read_only image2d_t in, read_only image2d_t mask, write_onl
   const float4 sigma = i * noise_level / threshold;
   const float4 noise = dt_noise_generator_simd(noise_distribution, i, sigma, state);
   const float weight = (read_imagef(mask, sampleri, (int2)(x, y))).x;
-  const float4 o = i * (1.0f - weight) + weight * noise;
+  const float4 o = fmax(i * (1.0f - weight) + weight * noise, 0.f);
   write_imagef(out, (int2)(x, y), o);
 }
 
@@ -644,7 +646,7 @@ kernel void init_reconstruct(read_only image2d_t in, read_only image2d_t mask, w
 
   const float4 i = read_imagef(in, sampleri, (int2)(x, y));
   const float4 weight = 1.f - (read_imagef(mask, sampleri, (int2)(x, y))).x;
-  float4 o = i * weight;
+  float4 o = fmax(i * weight, 0.f);
 
   // copy masks and alpha
   o.w = i.w;
@@ -674,11 +676,11 @@ kernel void blur_2D_Bspline_vertical(read_only image2d_t in, write_only image2d_
   float4 accumulator = (float4)0.f;
   for(int jj = 0; jj < FSIZE; ++jj)
   {
-    const int yy = mad24(mult, (jj - FSTART), y);
+    const int yy = mult * (jj - FSTART) + y;
     accumulator += filter[jj] * read_imagef(in, sampleri, (int2)(x, clamp(yy, 0, height - 1)));
   }
 
-  write_imagef(out, (int2)(x, y), accumulator);
+  write_imagef(out, (int2)(x, y), fmax(accumulator, 0.f));
 }
 
 kernel void blur_2D_Bspline_horizontal(read_only image2d_t in, write_only image2d_t out,
@@ -699,11 +701,11 @@ kernel void blur_2D_Bspline_horizontal(read_only image2d_t in, write_only image2
   float4 accumulator = (float4)0.f;
   for(int ii = 0; ii < FSIZE; ++ii)
   {
-    const int xx = mad24(mult, (ii - FSTART), x);
+    const int xx = mult * (ii - FSTART) + x;
     accumulator += filter[ii] * read_imagef(in, sampleri, (int2)(clamp(xx, 0, width - 1), y));
   }
 
-  write_imagef(out, (int2)(x, y), accumulator);
+  write_imagef(out, (int2)(x, y), fmax(accumulator, 0.f));
 }
 
 inline float fmaxabsf(const float a, const float b)
@@ -741,7 +743,8 @@ kernel void wavelets_detail_level(read_only image2d_t detail, read_only image2d_
   write_imagef(texture, (int2)(x, y), hf);
 }
 
-kernel void wavelets_reconstruct(read_only image2d_t HF, read_only image2d_t LF, read_only image2d_t texture, read_only image2d_t mask,
+kernel void wavelets_reconstruct(read_only image2d_t HF, read_only image2d_t LF, read_only image2d_t texture,
+                                 read_only image2d_t mask,
                                  read_only image2d_t reconstructed_read, write_only image2d_t reconstructed_write,
                                  const int width, const int height,
                                  const float gamma, const float gamma_comp, const float beta, const float beta_comp, const float delta,

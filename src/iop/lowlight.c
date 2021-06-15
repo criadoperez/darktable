@@ -1,6 +1,6 @@
 /*
     This file is part of darktable,
-    Copyright (C) 2011-2020 darktable developers.
+    Copyright (C) 2011-2021 darktable developers.
 
     darktable is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -144,7 +144,7 @@ void process(struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece, const 
   {
     float *in = (float *)i + ch * k;
     float *out = (float *)o + ch * k;
-    float XYZ[3], XYZ_s[3];
+    float DT_ALIGNED_PIXEL XYZ[4], XYZ_s[4];
     float V;
     float w;
 
@@ -489,9 +489,6 @@ static gboolean lowlight_draw(GtkWidget *widget, cairo_t *crf, gpointer user_dat
   dt_iop_lowlight_gui_data_t *c = (dt_iop_lowlight_gui_data_t *)self->gui_data;
   dt_iop_lowlight_params_t p = *(dt_iop_lowlight_params_t *)self->params;
 
-  const float aspect = dt_conf_get_int("plugins/darkroom/lowlight/aspect_percent") / 100.0;
-  dtgtk_drawing_area_set_aspect_ratio(widget, aspect);
-
   dt_draw_curve_set_point(c->transition_curve, 0, p.transition_x[DT_IOP_LOWLIGHT_BANDS - 2] - 1.0,
                           p.transition_y[0]);
   for(int k = 0; k < DT_IOP_LOWLIGHT_BANDS; k++)
@@ -801,10 +798,13 @@ static gboolean lowlight_scrolled(GtkWidget *widget, GdkEventScroll *event, gpoi
       //adjust aspect
       const int aspect = dt_conf_get_int("plugins/darkroom/lowlight/aspect_percent");
       dt_conf_set_int("plugins/darkroom/lowlight/aspect_percent", aspect + delta_y);
+      dtgtk_drawing_area_set_aspect_ratio(widget, aspect / 100.0);
     }
     else
+    {
       c->mouse_radius = CLAMP(c->mouse_radius * (1.0 + 0.1 * delta_y), 0.2 / DT_IOP_LOWLIGHT_BANDS, 1.0);
-    gtk_widget_queue_draw(widget);
+      gtk_widget_queue_draw(widget);
+    }
   }
 
   return TRUE;

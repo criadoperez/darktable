@@ -1,6 +1,6 @@
 /*
     This file is part of darktable,
-    Copyright (C) 2018-2020 darktable developers.
+    Copyright (C) 2018-2021 darktable developers.
 
     darktable is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -91,6 +91,7 @@ const dt_iop_order_entry_t legacy_order[] = {
   { {13.0f }, "spots", 0},
   { {14.0f }, "retouch", 0},
   { {15.0f }, "lens", 0},
+  { {15.5f }, "cacorrectrgb", 0},
   { {16.0f }, "ashift", 0},
   { {17.0f }, "liquify", 0},
   { {18.0f }, "rotatepixels", 0},
@@ -98,6 +99,7 @@ const dt_iop_order_entry_t legacy_order[] = {
   { {20.0f }, "flip", 0},
   { {21.0f }, "clipping", 0},
   { {21.5f }, "toneequal", 0},
+  { {21.7f }, "crop", 0},
   { {22.0f }, "graduatednd", 0},
   { {23.0f }, "basecurve", 0},
   { {24.0f }, "bilateral", 0},
@@ -174,6 +176,8 @@ const dt_iop_order_entry_t v30_order[] = {
   { {11.0f }, "rotatepixels", 0},
   { {12.0f }, "scalepixels", 0},
   { {13.0f }, "lens", 0},
+  { {13.5f }, "cacorrectrgb", 0}, // correct chromatic aberrations after lens correction so that lensfun
+                                  // does not reintroduce chromatic aberrations when trying to correct them
   { {14.0f }, "hazeremoval", 0},
   { {15.0f }, "ashift", 0},
   { {16.0f }, "flip", 0},
@@ -184,7 +188,8 @@ const dt_iop_order_entry_t v30_order[] = {
   { {21.0f }, "exposure", 0},
   { {22.0f }, "mask_manager", 0},
   { {23.0f }, "tonemap", 0},
-  { {24.0f }, "toneequal", 0},
+  { {24.0f }, "toneequal", 0},       // last module that need enlarged roi_in
+  { {24.5f }, "crop", 0},            // should go after all modules that may need a wider roi_in
   { {25.0f }, "graduatednd", 0},
   { {26.0f }, "profile_gamma", 0},
   { {27.0f }, "equalizer", 0},
@@ -654,6 +659,8 @@ GList *dt_ioppr_get_iop_order_list(int32_t imgid, gboolean sorted)
           _insert_before(iop_order_list, "negadoctor", "channelmixerrgb");
           _insert_before(iop_order_list, "negadoctor", "censorize");
           _insert_before(iop_order_list, "rgbcurve", "colorbalancergb");
+          _insert_before(iop_order_list, "ashift", "cacorrectrgb");
+          _insert_before(iop_order_list, "graduatednd", "crop");
         }
       }
       else if(version == DT_IOP_ORDER_LEGACY)
